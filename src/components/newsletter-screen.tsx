@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban, Download } from 'lucide-react';
+import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban, Download, Search, ArrowUpDown } from 'lucide-react';
 import { db } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -52,6 +52,11 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
   // Bulk operation progress
   const [bulkOp, setBulkOp] = useState<BulkOperation>(null);
   const cancelRef = useRef(false);
+
+  // Search, filter, sort
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'unsubscribed' | 'still-sending'>('all');
+  const [sortBy, setSortBy] = useState<'count' | 'date' | 'name'>('count');
 
   const loadNewsletters = useCallback(async () => {
     setLoading(true);
@@ -149,15 +154,34 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
     });
   };
 
+  // Computed filtered + sorted senders
+  const filteredSenders = React.useMemo(() => {
+    let result = senders;
+    // Status filter
+    if (statusFilter === 'active') result = result.filter(s => !s.unsubscribed);
+    if (statusFilter === 'unsubscribed') result = result.filter(s => s.unsubscribed);
+    if (statusFilter === 'still-sending') result = result.filter(s => s.stillSending);
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(s => s.senderName.toLowerCase().includes(q) || s.senderEmail.toLowerCase().includes(q));
+    }
+    // Sort
+    if (sortBy === 'count') result = [...result].sort((a, b) => b.count - a.count);
+    if (sortBy === 'date') result = [...result].sort((a, b) => new Date(b.lastReceived).getTime() - new Date(a.lastReceived).getTime());
+    if (sortBy === 'name') result = [...result].sort((a, b) => a.senderName.localeCompare(b.senderName));
+    return result;
+  }, [senders, searchQuery, statusFilter, sortBy]);
+
   const selectAll = () => {
-    setSelectedSenders(new Set(senders.map(s => s.senderEmail)));
+    setSelectedSenders(new Set(filteredSenders.map(s => s.senderEmail)));
   };
 
   const deselectAll = () => {
     setSelectedSenders(new Set());
   };
 
-  const allSelected = senders.length > 0 && selectedSenders.size === senders.length;
+  const allSelected = filteredSenders.length > 0 && filteredSenders.every(s => selectedSenders.has(s.senderEmail));
 
   // Get selected sender objects
   const getSelectedSenderObjects = (): GroupedSender[] => {
@@ -600,7 +624,10 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
       <div className={styles.topBar}>
         <div>
           <h1 className={styles.pageTitle}>Subscription Manager</h1>
-          <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Grouped by active senders who send newsletter/promotional emails</p>
+          <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+            {senders.length} senders &middot; {senders.filter(s => !s.unsubscribed).length} active &middot; {senders.filter(s => s.unsubscribed).length} unsubscribed
+            {senders.filter(s => s.stillSending).length > 0 && <span style={{ color: 'var(--warning)' }}> &middot; {senders.filter(s => s.stillSending).length} still sending</span>}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {senders.length > 0 && (
@@ -611,7 +638,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
               aria-label={allSelected ? 'Deselect all senders' : 'Select all senders'}
             >
               {allSelected ? <CheckSquare size={15} /> : <Square size={15} />}
-              {allSelected ? 'Deselect All' : 'Select All'}
+              {allSelected ? 'Deselect All' : `Select All${filteredSenders.length !== senders.length ? ` (${filteredSenders.length})` : ''}`}
             </button>
           )}
           <button 
@@ -624,6 +651,51 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
         </div>
       </div>
 
+      {/* Search + Filter + Sort Bar */}
+      {senders.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
+          {/* Search */}
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '180px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input
+              className={styles.input}
+              type="text"
+              placeholder="Search senders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: '30px', fontSize: '0.82rem', height: '34px' }}
+            />
+          </div>
+          {/* Status Filter Tabs */}
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            {([['all', 'All'], ['active', 'Active'], ['unsubscribed', "Unsub\u2019d"], ['still-sending', 'Violators']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                className={`${styles.btn} ${statusFilter === key ? styles.btnPrimary : styles.btnSecondary}`}
+                onClick={() => setStatusFilter(key)}
+                style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px' }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* Sort */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <ArrowUpDown size={13} style={{ color: 'var(--muted)' }} />
+            <select
+              className={styles.select}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'count' | 'date' | 'name')}
+              style={{ fontSize: '0.78rem', height: '34px', padding: '4px 8px', width: 'auto' }}
+            >
+              <option value="count">Most emails</option>
+              <option value="date">Most recent</option>
+              <option value="name">A to Z</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ padding: '5rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', color: 'var(--muted)' }}>
           <RefreshCw size={36} className={styles.loader} />
@@ -635,9 +707,15 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
           <h3>No newsletter subscriptions detected.</h3>
           <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Ensure you have scanned your mailbox folders from the main dashboard tab.</p>
         </div>
+      ) : filteredSenders.length === 0 ? (
+        <div className={styles.tableCard} style={{ padding: '3rem', textAlign: 'center', color: 'var(--muted)' }}>
+          <Search size={36} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+          <h3>No senders match your filters</h3>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>Try adjusting your search or filter criteria.</p>
+        </div>
       ) : (
         <div className={styles.senderGrid}>
-          {senders.map(sender => {
+          {filteredSenders.map(sender => {
             const isSelected = selectedSenders.has(sender.senderEmail);
             return (
               <div

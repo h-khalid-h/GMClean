@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download } from 'lucide-react';
+import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download, Activity, ShieldCheck, Lightbulb, TrendingDown, AlertTriangle, Sparkles } from 'lucide-react';
 import { db, type EmailRecord } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
 interface DashboardScreenProps {
   userEmail: string;
   mailboxHost: string;
+  onQuickClean?: (senderEmails: string[]) => void;
 }
 
-export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScreenProps) {
+export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }: DashboardScreenProps) {
   const [emails, setEmails] = useState<EmailRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'newsletter' | 'transaction' | 'social' | 'personal'>('all');
@@ -554,6 +555,196 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           </button>
         </div>
       )}
+
+      {/* ====== INBOX HEALTH SCORE ====== */}
+      {stats.total > 0 && (() => {
+        // Compute health score from emails
+        const newsletterEmails = emails.filter(e => e.category === 'newsletter' && e.deleted === 0);
+        const newsletterRatio = stats.total > 0 ? stats.newsletters / stats.total : 0;
+
+        // Group newsletters by sender
+        const nlSenderMap: Record<string, { unsubscribed: boolean; unsubscribedAt: number; lastDate: number; count: number; stillSending: boolean; email: string }> = {};
+        newsletterEmails.forEach(e => {
+          const key = (e.senderEmail || '').toLowerCase();
+          if (!nlSenderMap[key]) {
+            nlSenderMap[key] = { unsubscribed: false, unsubscribedAt: 0, lastDate: 0, count: 0, stillSending: false, email: e.senderEmail };
+          }
+          const g = nlSenderMap[key];
+          g.count++;
+          const t = new Date(e.date).getTime();
+          if (t > g.lastDate) g.lastDate = t;
+          if (e.unsubscribed === 1) { g.unsubscribed = true; }
+          if (e.unsubscribedAt && e.unsubscribedAt > g.unsubscribedAt) g.unsubscribedAt = e.unsubscribedAt;
+        });
+
+        // Detect still-sending
+        Object.values(nlSenderMap).forEach(g => {
+          if (g.unsubscribedAt > 0 && g.lastDate > g.unsubscribedAt) g.stillSending = true;
+        });
+
+        const totalNlSenders = Object.keys(nlSenderMap).length;
+        const unsubscribedSenders = Object.values(nlSenderMap).filter(g => g.unsubscribed).length;
+        const stillSendingCount = Object.values(nlSenderMap).filter(g => g.stillSending).length;
+
+        // Stale senders: newsletters not received in 90+ days but not unsubscribed
+        const now = Date.now();
+        const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+        const staleSenders = Object.values(nlSenderMap).filter(g => !g.unsubscribed && (now - g.lastDate) > NINETY_DAYS);
+
+        // Factor 1: Newsletter ratio (25 pts) — lower is better
+        const ratioScore = Math.round(25 * Math.max(0, 1 - (newsletterRatio / 0.5)));
+        const ratioPenalty = 25 - ratioScore;
+
+        // Factor 2: Unsubscribe action rate (25 pts)
+        const unsubRate = totalNlSenders > 0 ? unsubscribedSenders / totalNlSenders : 1;
+        const unsubScore = Math.round(25 * unsubRate);
+        const unsubPenalty = 25 - unsubScore;
+
+        // Factor 3: Still-sending violators (20 pts)
+        const stillSendingScore = Math.round(20 * Math.max(0, 1 - (stillSendingCount / 5)));
+        const stillSendingPenalty = 20 - stillSendingScore;
+
+        // Factor 4: Stale subscriptions (15 pts)
+        const staleScore = Math.round(15 * Math.max(0, 1 - (staleSenders.length / 15)));
+        const stalePenalty = 15 - staleScore;
+
+        // Factor 5: Category diversity (15 pts)
+        const personalTransPct = stats.total > 0 ? (stats.personal + stats.transactions) / stats.total : 0;
+        const diversityScore = Math.round(15 * Math.min(1, personalTransPct / 0.4));
+        const diversityPenalty = 15 - diversityScore;
+
+        const totalScore = ratioScore + unsubScore + stillSendingScore + staleScore + diversityScore;
+
+        // Grade
+        const grade = totalScore >= 90 ? { label: 'Excellent', color: '#10b981', bg: 'rgba(16,185,129,0.1)' }
+          : totalScore >= 70 ? { label: 'Good', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' }
+          : totalScore >= 50 ? { label: 'Fair', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
+          : { label: 'Needs Work', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+
+        // SVG ring
+        const circumference = 2 * Math.PI * 56;
+        const offset = circumference - (totalScore / 100) * circumference;
+
+        // Factors for display
+        const factors = [
+          { label: `Newsletter ratio: ${Math.round(newsletterRatio * 100)}%`, pts: ratioPenalty, icon: <Mail size={14} />, good: ratioPenalty === 0 },
+          { label: `Unsubscribe rate: ${totalNlSenders > 0 ? Math.round(unsubRate * 100) : 100}%`, pts: unsubPenalty, icon: <ShieldCheck size={14} />, good: unsubPenalty === 0 },
+          { label: `Still-sending violators: ${stillSendingCount}`, pts: stillSendingPenalty, icon: <AlertTriangle size={14} />, good: stillSendingPenalty === 0 },
+          { label: `Stale subscriptions: ${staleSenders.length}`, pts: stalePenalty, icon: <TrendingDown size={14} />, good: stalePenalty === 0 },
+          { label: `Category diversity: ${Math.round(personalTransPct * 100)}% personal/transactional`, pts: diversityPenalty, icon: <Sparkles size={14} />, good: diversityPenalty === 0 },
+        ];
+
+        // Recommendations
+        const recommendations: { icon: React.ReactNode; text: string; actionable: boolean; senders?: string[] }[] = [];
+        if (staleSenders.length > 0) {
+          recommendations.push({
+            icon: <TrendingDown size={13} className={styles.healthRecIcon} />,
+            text: `Unsubscribe from ${staleSenders.length} stale sender${staleSenders.length > 1 ? 's' : ''} (no emails in 90+ days)`,
+            actionable: true,
+            senders: staleSenders.map(s => s.email),
+          });
+        }
+        if (stillSendingCount > 0) {
+          recommendations.push({
+            icon: <AlertTriangle size={13} className={styles.healthRecIcon} />,
+            text: `${stillSendingCount} sender${stillSendingCount > 1 ? 's' : ''} still emailing after unsubscribe — consider deleting`,
+            actionable: false,
+          });
+        }
+        const oldNlCount = newsletterEmails.filter(e => (now - new Date(e.date).getTime()) > 365 * 24 * 60 * 60 * 1000).length;
+        if (oldNlCount > 50) {
+          recommendations.push({
+            icon: <Trash2 size={13} className={styles.healthRecIcon} />,
+            text: `${oldNlCount.toLocaleString()} newsletter emails older than 1 year — bulk delete to clean up`,
+            actionable: false,
+          });
+        }
+        if (totalNlSenders > 0 && unsubscribedSenders === 0) {
+          recommendations.push({
+            icon: <Lightbulb size={13} className={styles.healthRecIcon} />,
+            text: `You haven't unsubscribed from any of your ${totalNlSenders} newsletter senders yet`,
+            actionable: false,
+          });
+        }
+
+        return (
+          <div className={styles.healthCard}>
+            <div className={styles.healthHeader}>
+              <Activity size={20} style={{ color: grade.color }} />
+              Inbox Health Score
+            </div>
+            <div className={styles.healthBody}>
+              <div className={styles.healthRingWrapper}>
+                <div className={styles.healthRing}>
+                  <svg viewBox="0 0 128 128" width="140" height="140">
+                    <circle cx="64" cy="64" r="56" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
+                    <circle
+                      cx="64" cy="64" r="56" fill="none"
+                      stroke={grade.color}
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={offset}
+                      transform="rotate(-90 64 64)"
+                      style={{ transition: 'stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                    />
+                  </svg>
+                  <div className={styles.healthRingCenter}>
+                    <div className={styles.healthScore} style={{ color: grade.color }}>{totalScore}</div>
+                    <div className={styles.healthScoreMax}>/100</div>
+                  </div>
+                </div>
+                <span className={styles.healthGrade} style={{ color: grade.color, background: grade.bg }}>
+                  {grade.label}
+                </span>
+              </div>
+
+              <div className={styles.healthRight}>
+                <div className={styles.healthFactors}>
+                  {factors.map((f, i) => (
+                    <div key={i} className={styles.healthFactor}>
+                      <span className={styles.healthFactorIcon} style={{ color: f.good ? '#10b981' : f.pts >= 15 ? '#ef4444' : '#f59e0b' }}>
+                        {f.icon}
+                      </span>
+                      <span>{f.label}</span>
+                      <span className={styles.healthFactorPoints} style={{
+                        color: f.good ? '#10b981' : f.pts >= 15 ? '#ef4444' : '#f59e0b',
+                        background: f.good ? 'rgba(16,185,129,0.1)' : f.pts >= 15 ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+                      }}>
+                        {f.good ? '✓' : `-${f.pts} pts`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {recommendations.length > 0 && (
+                  <div className={styles.healthRecommendations}>
+                    <div className={styles.healthRecommendationsTitle}>
+                      <Lightbulb size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '0.3rem' }} />
+                      Recommendations
+                    </div>
+                    {recommendations.map((rec, i) => (
+                      <div key={i} className={styles.healthRec}>
+                        {rec.icon}
+                        <span>{rec.text}</span>
+                        {rec.actionable && rec.senders && onQuickClean && (
+                          <button
+                            className={`${styles.btn} ${styles.btnPrimary}`}
+                            style={{ padding: '3px 10px', fontSize: '0.7rem', width: 'auto', flexShrink: 0, marginLeft: '0.5rem' }}
+                            onClick={() => onQuickClean(rec.senders!)}
+                          >
+                            Quick Clean
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ====== ANALYTICS DASHBOARD ====== */}
       {stats.total > 0 && (() => {

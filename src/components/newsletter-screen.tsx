@@ -7,6 +7,8 @@ import styles from '@/app/page.module.css';
 
 interface NewsletterScreenProps {
   userEmail: string;
+  preselectedSenders?: string[];
+  onPreselectedConsumed?: () => void;
 }
 
 interface GroupedSender {
@@ -36,7 +38,7 @@ type BulkOperation = {
   cancelled: boolean;
 } | null;
 
-export default function NewsletterScreen({ userEmail }: NewsletterScreenProps) {
+export default function NewsletterScreen({ userEmail, preselectedSenders, onPreselectedConsumed }: NewsletterScreenProps) {
   const [senders, setSenders] = useState<GroupedSender[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -114,6 +116,20 @@ export default function NewsletterScreen({ userEmail }: NewsletterScreenProps) {
   useEffect(() => {
     setTimeout(() => { loadNewsletters(); }, 0);
   }, [loadNewsletters]);
+
+  // Handle preselected senders from Quick Clean
+  useEffect(() => {
+    if (preselectedSenders && preselectedSenders.length > 0 && senders.length > 0) {
+      const preselectedSet = new Set(preselectedSenders.map(s => s.toLowerCase()));
+      const matching = senders
+        .filter(s => preselectedSet.has(s.senderEmail.toLowerCase()))
+        .map(s => s.senderEmail);
+      if (matching.length > 0) {
+        setSelectedSenders(new Set(matching));
+      }
+      onPreselectedConsumed?.();
+    }
+  }, [preselectedSenders, senders, onPreselectedConsumed]);
 
   // ── Selection helpers ──
   const toggleSelect = (senderEmail: string) => {

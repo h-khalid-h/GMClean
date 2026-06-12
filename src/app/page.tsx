@@ -16,6 +16,7 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [preselectedSenders, setPreselectedSenders] = useState<string[]>([]);
 
   // Check if session exists on load
   useEffect(() => {
@@ -172,10 +173,16 @@ export default function Home() {
             <DashboardScreen
               userEmail={session.user}
               mailboxHost={session.host}
+              onQuickClean={(senderEmails) => {
+                setPreselectedSenders(senderEmails);
+                setActiveTab('newsletters');
+              }}
             />
           ) : (
             <NewsletterScreen 
-              userEmail={session.user} 
+              userEmail={session.user}
+              preselectedSenders={preselectedSenders}
+              onPreselectedConsumed={() => setPreselectedSenders([])}
             />
           )}
         </section>

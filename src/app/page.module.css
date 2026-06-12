@@ -457,6 +457,151 @@
   white-space: nowrap;
 }
 
+/* ====== INBOX HEALTH SCORE ====== */
+.healthCard {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.healthHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.healthBody {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.healthRingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.healthRing {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+.healthRingCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.healthScore {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.healthScoreMax {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.healthGrade {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.healthRight {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.healthFactors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.healthFactor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted-light);
+}
+
+.healthFactorIcon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.healthFactorPoints {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.healthRecommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.healthRecommendationsTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted-light);
+  margin-bottom: 0.2rem;
+}
+
+.healthRec {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted-light);
+  line-height: 1.4;
+}
+
+.healthRecIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .healthBody {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+  .healthRingWrapper {
+    align-self: center;
+  }
+}
+
 /* Newsletter Sender Groups */
 .senderGrid {
   display: grid;

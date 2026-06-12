@@ -1,6 +1,6 @@
 import { type NextRequest } from 'next/server';
 import { decryptSession } from '@/lib/crypto';
-import { fetchEmailsStreaming, type ImapConfig } from '@/lib/imap';
+import { fetchEmailsStreaming, refreshAccessToken, type ImapConfig } from '@/lib/imap';
 
 // POST: Stream sync chunks via Server-Sent Events
 export async function POST(request: NextRequest) {
@@ -19,10 +19,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Refresh access token if needed
+  if (config.accessToken && config.refreshToken) {
+    await refreshAccessToken(config);
+  }
+
   // Extract parameters from query string
   const url = new URL(request.url);
-  const totalLimit = parseInt(url.searchParams.get('totalLimit') || '500');
-  const chunkSize = parseInt(url.searchParams.get('chunkSize') || '100');
+  const totalLimit = parseInt(url.searchParams.get('totalLimit') || '500', 10) || 500;
+  const chunkSize = parseInt(url.searchParams.get('chunkSize') || '100', 10) || 100;
   const folder = url.searchParams.get('folder') || 'INBOX';
 
   const encoder = new TextEncoder();

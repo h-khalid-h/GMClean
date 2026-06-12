@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { decryptSession } from '@/lib/crypto';
 import { deleteEmailsByUid, type ImapConfig } from '@/lib/imap';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const dnsLookup = promisify(dns.lookup);
 
 interface ActionPayload {
   action: 'delete' | 'unsubscribe';
@@ -11,6 +15,13 @@ interface ActionPayload {
 }
 
 export async function POST(request: NextRequest) {
+  // CSRF protection: verify request origin
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+  if (origin && host && !origin.includes(host)) {
+    return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
+  }
+
   const sessionCookie = request.cookies.get('gmclean_session');
   
   if (!sessionCookie?.value) {
@@ -82,6 +93,20 @@ export async function POST(request: NextRequest) {
           ];
           if (blockedPatterns.some(p => hostname.startsWith(p) || hostname === p)) {
             return NextResponse.json({ error: 'Unsubscribe links to internal/private networks are blocked.' }, { status: 400 });
+          }
+
+          // DNS resolution check for SSRF bypass via DNS rebinding
+          try {
+            const resolved = await dnsLookup(url.hostname);
+            const ip = resolved.address;
+            if (ip.startsWith('127.') || ip.startsWith('10.') || ip.startsWith('192.168.') ||
+                ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.') ||
+                ip === '::1' || ip === '0.0.0.0' || ip.startsWith('169.254.') ||
+                ip.startsWith('fc00:') || ip.startsWith('fe80:')) {
+              return NextResponse.json({ error: 'Unsubscribe links resolving to private networks are blocked.' }, { status: 400 });
+            }
+          } catch {
+            // DNS resolution failed — proceed with caution, link may be offline
           }
         } catch {
           return NextResponse.json({ error: 'Invalid unsubscribe URL.' }, { status: 400 });

@@ -158,38 +158,25 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         const batch = targetEmails.slice(i, i + BATCH_SIZE);
         setSyncMessage(`AI Boost: Classifying batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(targetEmails.length / BATCH_SIZE)}...`);
 
-        const prompt = `You are an email classification assistant. Classify the following emails into one of these exact categories: 'newsletter', 'transaction', 'social', 'personal'.
-- 'newsletter': Promotional emails, circulars, advertisements, newsletters, updates.
-- 'transaction': Receipts, invoices, order confirmations, bill reminders, shipping updates, one-time passwords (OTP), account creation confirmation, password reset links.
-- 'social': Notifications from social networks like LinkedIn, Facebook, Twitter/X, Instagram, GitHub updates, comments, followers.
-- 'personal': Direct human-to-human emails, personalized messages, and conversations that do not fit the other categories.
-
-Analyze the sender and subject of each email carefully. Output MUST be a valid JSON array of objects, with each object having exactly "uid" (number) and "category" (string). Do not add any explanation or markdown formatting like \`\`\`json.
-Emails to classify:
-${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.senderEmail}>`, subject: e.subject })))}`;
-
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch('/api/ai/classify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
+            apiKey,
+            emails: batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.senderEmail}>`, subject: e.subject })),
+          }),
         });
 
         if (!response.ok) {
-          console.warn(`Gemini API batch failed: ${response.status}`);
+          console.warn(`AI classify batch failed: ${response.status}`);
           continue;
         }
 
         const resData = await response.json();
-        const textResponse = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!textResponse) continue;
+        if (!resData.classifications) continue;
 
         try {
-          const classifications = JSON.parse(textResponse) as Array<{ uid: number; category: 'newsletter' | 'transaction' | 'social' | 'personal' }>;
+          const classifications = resData.classifications as Array<{ uid: number; category: 'newsletter' | 'transaction' | 'social' | 'personal' }>;
           if (Array.isArray(classifications)) {
             await Promise.all(classifications.map(async (c) => {
               const validCategories = ['newsletter', 'transaction', 'social', 'personal'];
@@ -200,7 +187,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
             await loadEmails();
           }
         } catch (parseErr) {
-          console.error('Failed to parse Gemini classification:', parseErr, textResponse);
+          console.error('Failed to parse AI classification:', parseErr);
         }
       }
     } catch (err) {

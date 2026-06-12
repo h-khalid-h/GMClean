@@ -84,6 +84,10 @@ export async function GET(request: NextRequest) {
       secure: true,
       user: userEmail,
       accessToken: accessToken,
+      refreshToken: tokens.refresh_token || undefined,
+      clientId,
+      clientSecret,
+      tokenExpiry: tokens.expires_in ? Date.now() + (tokens.expires_in * 1000) : undefined,
     };
 
     // Encrypt the session config
@@ -96,7 +100,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 2, // 2 hours (access tokens expire in ~1hr, refresh extends this)
       path: '/',
     });
 

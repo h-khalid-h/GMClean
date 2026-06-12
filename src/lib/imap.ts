@@ -8,6 +8,10 @@ export interface ImapConfig {
   user: string;
   pass?: string;
   accessToken?: string;
+  refreshToken?: string;
+  clientId?: string;
+  clientSecret?: string;
+  tokenExpiry?: number;
 }
 
 export interface ParsedEmail {
@@ -40,6 +44,66 @@ export function createImapClient(config: ImapConfig): ImapFlow {
     auth: authOptions,
     logger: false, // Keep logs clean
   });
+}
+
+// Refresh an OAuth access token if it's expired or about to expire (within 60s)
+export async function refreshAccessToken(config: ImapConfig): Promise<string | null> {
+  // If no refresh token or no expiry info, return existing token as-is
+  if (!config.refreshToken || !config.tokenExpiry) {
+    return config.accessToken || null;
+  }
+
+  // Check if token is still valid (with 60s buffer)
+  if (Date.now() < config.tokenExpiry - 60000) {
+    return config.accessToken || null;
+  }
+
+  if (!config.clientId || !config.clientSecret) {
+    return config.accessToken || null;
+  }
+
+  // Google
+  if (config.host === 'imap.gmail.com') {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: config.refreshToken,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      config.accessToken = data.access_token;
+      config.tokenExpiry = Date.now() + (data.expires_in * 1000);
+      return data.access_token as string;
+    }
+  }
+
+  // Microsoft
+  if (config.host === 'outlook.office365.com') {
+    const res = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: config.refreshToken,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      config.accessToken = data.access_token;
+      config.tokenExpiry = Date.now() + (data.expires_in * 1000);
+      return data.access_token as string;
+    }
+  }
+
+  // Refresh failed — return existing token (may be expired)
+  return config.accessToken || null;
 }
 
 // List all selectable IMAP folders

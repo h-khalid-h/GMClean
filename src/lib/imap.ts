@@ -309,8 +309,13 @@ export async function fetchEmailsChunk(
   };
 }
 
-// Bulk delete messages by UID
-export async function deleteEmailsByUid(config: ImapConfig, uids: number[], folder: string = 'INBOX'): Promise<boolean> {
+// Bulk delete messages by UID — supports safe mode (move to Trash) or permanent expunge
+export async function deleteEmailsByUid(
+  config: ImapConfig,
+  uids: number[],
+  folder: string = 'INBOX',
+  trashFolder?: string // If provided, moves to this folder instead of deleting
+): Promise<boolean> {
   if (uids.length === 0) return true;
 
   const client = createImapClient(config);
@@ -319,8 +324,13 @@ export async function deleteEmailsByUid(config: ImapConfig, uids: number[], fold
   const lock = await client.getMailboxLock(folder);
 
   try {
-    // Delete messages and expunge them
-    await client.messageDelete(uids, { uid: true });
+    if (trashFolder && trashFolder !== folder) {
+      // Safe delete: move to Trash folder
+      await client.messageMove(uids, trashFolder, { uid: true });
+    } else {
+      // Permanent delete: flag + expunge
+      await client.messageDelete(uids, { uid: true });
+    }
     return true;
   } finally {
     lock.release();

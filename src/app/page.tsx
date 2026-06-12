@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User, Sun, Moon } from 'lucide-react';
+import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User, Sun, Moon, Shield } from 'lucide-react';
 import ConnectionScreen from '@/components/connection-screen';
 import DashboardScreen from '@/components/dashboard-screen';
 import NewsletterScreen from '@/components/newsletter-screen';
@@ -20,6 +20,7 @@ export default function Home() {
   const [accounts, setAccounts] = useState<{ index: number; user: string; host: string }[]>([]);
   const [addingAccount, setAddingAccount] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [crossHealth, setCrossHealth] = useState<{ score: number; total: number; newsletters: number; accounts: number } | null>(null);
 
   // Load saved theme on mount
   useEffect(() => {
@@ -111,6 +112,25 @@ export default function Home() {
     }
   };
 
+  // Compute cross-account health when accounts change
+  useEffect(() => {
+    if (accounts.length < 2) { setCrossHealth(null); return; }
+    const compute = async () => {
+      let totalEmails = 0;
+      let totalNewsletters = 0;
+      for (const acc of accounts) {
+        const all = await db.emails.where('mailbox').equals(acc.user).count();
+        const nl = await db.emails.where('mailbox').equals(acc.user).filter(e => e.category === 'newsletter' && e.deleted === 0).count();
+        totalEmails += all;
+        totalNewsletters += nl;
+      }
+      const ratio = totalEmails > 0 ? totalNewsletters / totalEmails : 0;
+      const score = Math.round(Math.max(0, 100 - (ratio * 200)));
+      setCrossHealth({ score, total: totalEmails, newsletters: totalNewsletters, accounts: accounts.length });
+    };
+    compute();
+  }, [accounts]);
+
   const handleAddAccount = () => {
     setAddingAccount(true);
   };
@@ -190,6 +210,26 @@ export default function Home() {
           </nav>
 
           <div className={styles.sidebarFooter}>
+            {/* Cross-Account Health Badge */}
+            {crossHealth && (
+              <div style={{
+                padding: '0.6rem', marginBottom: '0.5rem', width: '100%',
+                background: 'rgba(139,92,246,0.08)', borderRadius: '8px',
+                border: '1px solid rgba(139,92,246,0.15)',
+                textAlign: 'center',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                  <Shield size={14} style={{ color: crossHealth.score >= 70 ? '#10b981' : crossHealth.score >= 40 ? '#f59e0b' : '#ef4444' }} />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>All Accounts</span>
+                </div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: crossHealth.score >= 70 ? '#10b981' : crossHealth.score >= 40 ? '#f59e0b' : '#ef4444' }}>
+                  {crossHealth.score}
+                </div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>
+                  {crossHealth.total.toLocaleString()} emails · {crossHealth.newsletters.toLocaleString()} newsletters
+                </div>
+              </div>
+            )}
             {/* Account Switcher */}
             {accounts.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem', width: '100%' }}>

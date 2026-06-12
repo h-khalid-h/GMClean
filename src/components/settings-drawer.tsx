@@ -18,6 +18,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [syncLimit, setSyncLimit] = useState('500');
   const [autoSyncInterval, setAutoSyncInterval] = useState('0');
+  const [permanentDelete, setPermanentDelete] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [clearStatus, setClearStatus] = useState<'idle' | 'cleared'>('idle');
   const [activeGuide, setActiveGuide] = useState<'gmail' | 'outlook' | 'yahoo'>('gmail');
@@ -33,6 +34,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
         setGeminiApiKey(localStorage.getItem('gmclean_gemini_api_key') || '');
         setSyncLimit(localStorage.getItem('gmclean_sync_limit') || '500');
         setAutoSyncInterval(localStorage.getItem('gmclean_auto_sync') || '0');
+        setPermanentDelete(localStorage.getItem('gmclean_permanent_delete') === '1');
       }, 0);
     }
   }, [isOpen]);
@@ -46,6 +48,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
       localStorage.setItem('gmclean_gemini_api_key', geminiApiKey);
       localStorage.setItem('gmclean_sync_limit', syncLimit);
       localStorage.setItem('gmclean_auto_sync', autoSyncInterval);
+      localStorage.setItem('gmclean_permanent_delete', permanentDelete ? '1' : '0');
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -141,6 +144,37 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
               {autoSyncInterval !== '0'
                 ? `\u2705 Auto-sync will run every ${autoSyncInterval} minutes while the dashboard is open.`
                 : 'Enable to automatically re-scan your inbox at regular intervals.'
+              }
+            </span>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Trash2 size={14} /> Delete Behavior
+            </label>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+              onClick={() => setPermanentDelete(!permanentDelete)}
+            >
+              <div style={{
+                width: '40px', height: '22px', borderRadius: '11px',
+                background: permanentDelete ? '#ef4444' : 'var(--primary)',
+                position: 'relative', transition: 'background 0.2s',
+              }}>
+                <div style={{
+                  width: '18px', height: '18px', borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: '2px',
+                  left: permanentDelete ? '20px' : '2px', transition: 'left 0.2s',
+                }} />
+              </div>
+              <span style={{ fontSize: '0.82rem', color: permanentDelete ? '#ef4444' : 'var(--foreground)' }}>
+                {permanentDelete ? 'Permanent Delete (no undo)' : 'Safe Delete (move to Trash)'}
+              </span>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: permanentDelete ? '#f59e0b' : 'var(--muted)' }}>
+              {permanentDelete
+                ? '\u26a0\ufe0f Deleted emails will be permanently removed from your mail server and cannot be recovered.'
+                : 'Deleted emails will be moved to your Trash folder. You can recover them from Trash anytime.'
               }
             </span>
           </div>

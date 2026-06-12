@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban, Download, Search, ArrowUpDown } from 'lucide-react';
+import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban, Download, Search, ArrowUpDown, Filter } from 'lucide-react';
 import { db } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -256,12 +256,14 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
     setAlert(null);
 
     try {
+      const permanent = localStorage.getItem('gmclean_permanent_delete') === '1';
       const response = await fetch('/api/mail/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           action: 'delete', 
-          uids: sender.uids 
+          uids: sender.uids,
+          permanent,
         }),
       });
 
@@ -278,6 +280,60 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
       await loadNewsletters();
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Bulk deletion failed.';
+      setAlert({ type: 'error', message: errMsg });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ── Keep newest, delete rest ──
+  const handleKeepNewest = async (sender: GroupedSender) => {
+    if (sender.uids.length <= 1) return; // Nothing to clean
+
+    const confirmKeep = window.confirm(
+      `Keep only the newest email from ${sender.senderName} and delete the other ${sender.count - 1}?\n\nThis will remove ${sender.count - 1} older emails from your mail server.`
+    );
+    if (!confirmKeep) return;
+
+    setActionLoadingId(`keep-${sender.senderEmail}`);
+    setAlert(null);
+
+    try {
+      // Get all emails from this sender sorted by date
+      const senderEmails = await db.emails
+        .where('mailbox').equals(userEmail)
+        .and(e => e.senderEmail.toLowerCase() === sender.senderEmail.toLowerCase() && e.category === 'newsletter' && e.deleted === 0)
+        .sortBy('date');
+
+      if (senderEmails.length <= 1) {
+        setAlert({ type: 'success', message: 'Only one email from this sender, nothing to clean.' });
+        return;
+      }
+
+      // Keep the newest (last after sort by date), delete the rest
+      const toDelete = senderEmails.slice(0, -1);
+      const deleteUids = toDelete.map(e => e.uid);
+
+      const permanent = localStorage.getItem('gmclean_permanent_delete') === '1';
+      const response = await fetch('/api/mail/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', uids: deleteUids, permanent }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Keep newest failed.');
+      }
+
+      await Promise.all(
+        deleteUids.map(uid => db.emails.where({ mailbox: userEmail, uid }).modify({ deleted: 1 }))
+      );
+
+      setAlert({ type: 'success', message: `Kept newest, cleaned ${deleteUids.length} older emails from ${sender.senderName}.` });
+      await loadNewsletters();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Keep newest failed.';
       setAlert({ type: 'error', message: errMsg });
     } finally {
       setActionLoadingId(null);
@@ -426,10 +482,11 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
       } : null);
 
       try {
+        const permanent = localStorage.getItem('gmclean_permanent_delete') === '1';
         const response = await fetch('/api/mail/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', uids: batch }),
+          body: JSON.stringify({ action: 'delete', uids: batch, permanent }),
         });
 
         if (!response.ok) {
@@ -788,6 +845,23 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
                       style={{ padding: '6px 8px', fontSize: '0.75rem', opacity: 0.4 }}
                     >
                       No Header Link
+                    </button>
+                  )}
+
+                  {sender.count > 1 && (
+                    <button
+                      className={`${styles.btn} ${styles.btnSecondary}`}
+                      onClick={() => handleKeepNewest(sender)}
+                      disabled={actionLoadingId === `keep-${sender.senderEmail}`}
+                      style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                      title={`Keep newest, delete ${sender.count - 1} older`}
+                    >
+                      {actionLoadingId === `keep-${sender.senderEmail}` ? (
+                        <RefreshCw size={12} className={styles.loader} />
+                      ) : (
+                        <Filter size={12} />
+                      )}
+                      Keep 1
                     </button>
                   )}
 

@@ -383,10 +383,11 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
     setActionAlert(null);
 
     try {
+      const permanent = localStorage.getItem('gmclean_permanent_delete') === '1';
       const response = await fetch('/api/mail/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', uids: [uid] }),
+        body: JSON.stringify({ action: 'delete', uids: [uid], permanent }),
       });
 
       if (!response.ok) {

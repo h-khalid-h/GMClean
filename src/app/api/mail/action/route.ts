@@ -10,6 +10,7 @@ interface ActionPayload {
   action: 'delete' | 'unsubscribe';
   uids?: number[];
   folder?: string;
+  permanent?: boolean; // If true, permanently expunge. If false/omitted, move to Trash.
   link?: string;
   senderEmail?: string;
 }
@@ -51,9 +52,26 @@ export async function POST(request: NextRequest) {
 
       // Convert UIDs to numbers defensively
       const numericUids = uids.map(uid => Number(uid)).filter(uid => !isNaN(uid));
-      await deleteEmailsByUid(config, numericUids, body.folder || 'INBOX');
+      const sourceFolder = body.folder || 'INBOX';
 
-      return NextResponse.json({ success: true, message: `Successfully deleted ${numericUids.length} emails.` });
+      // Safe delete: resolve trash folder unless permanent is requested
+      let trashFolder: string | undefined;
+      if (!body.permanent) {
+        try {
+          const { listFolders } = await import('@/lib/imap');
+          const folders = await listFolders(config);
+          // Common trash folder names across providers
+          const trashNames = ['[Gmail]/Trash', '[Gmail]/Bin', 'Trash', 'Deleted Items', 'Deleted Messages', 'Deleted'];
+          trashFolder = folders.find(f => trashNames.some(t => f.toLowerCase() === t.toLowerCase()));
+        } catch {
+          // Can't resolve trash — fall back to permanent delete
+        }
+      }
+
+      await deleteEmailsByUid(config, numericUids, sourceFolder, trashFolder);
+
+      const method = trashFolder ? 'moved to Trash' : 'permanently deleted';
+      return NextResponse.json({ success: true, message: `Successfully ${method} ${numericUids.length} emails.`, method: trashFolder ? 'trash' : 'permanent' });
     }
 
     // 2. ACTION: UNSUBSCRIBE

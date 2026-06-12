@@ -155,7 +155,7 @@ export default function Home() {
             </button>
 
             <span className={styles.navLabel} style={{ fontSize: '0.65rem', color: 'var(--muted)', textAlign: 'center', opacity: 0.5, marginTop: '0.25rem' }}>
-              v1.0.0
+              v1.1.0
             </span>
           </div>
         </aside>

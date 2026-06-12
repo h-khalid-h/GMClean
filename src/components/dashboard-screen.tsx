@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download, Activity, ShieldCheck, Lightbulb, TrendingDown, AlertTriangle, Sparkles } from 'lucide-react';
+import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download, Activity, ShieldCheck, Lightbulb, TrendingDown, TrendingUp, AlertTriangle, Sparkles, Minus } from 'lucide-react';
 import { db, type EmailRecord } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -749,15 +749,22 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
       {/* ====== ANALYTICS DASHBOARD ====== */}
       {stats.total > 0 && (() => {
         // Compute analytics from emails array
-        const senderCounts: Record<string, { name: string; count: number }> = {};
+        const senderCounts: Record<string, { name: string; count: number; firstDate: number; lastDate: number; recentCount: number }> = {};
         let oldestDate: Date | null = null;
         let newestDate: Date | null = null;
+        const now = Date.now();
+        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
         emails.forEach(e => {
           const key = (e.senderEmail || '').toLowerCase();
-          if (!senderCounts[key]) senderCounts[key] = { name: e.senderName || key, count: 0 };
-          senderCounts[key].count += 1;
           const d = new Date(e.date);
+          const t = d.getTime();
+          if (!senderCounts[key]) senderCounts[key] = { name: e.senderName || key, count: 0, firstDate: t, lastDate: t, recentCount: 0 };
+          const s = senderCounts[key];
+          s.count += 1;
+          if (t < s.firstDate) s.firstDate = t;
+          if (t > s.lastDate) s.lastDate = t;
+          if ((now - t) < THIRTY_DAYS) s.recentCount += 1;
           if (!oldestDate || d < oldestDate) oldestDate = d;
           if (!newestDate || d > newestDate) newestDate = d;
         });
@@ -859,22 +866,44 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
                 </div>
               </div>
 
-              {/* Top Senders Bar Chart */}
+              {/* Top Senders — Enhanced */}
               <div className={styles.barChartCard}>
                 <h3>Top Senders</h3>
                 <div className={styles.barChartList}>
-                  {topSenders.map(([, sender], i) => (
-                    <div key={i} className={styles.barChartRow}>
-                      <span className={styles.barChartLabel} title={sender.name}>{sender.name}</span>
-                      <div className={styles.barChartTrack}>
-                        <div
-                          className={styles.barChartFill}
-                          style={{ width: `${(sender.count / maxSenderCount) * 100}%` }}
-                        />
+                  {topSenders.map(([, sender], i) => {
+                    // Compute months span for this sender
+                    const monthSpan = Math.max(1, (sender.lastDate - sender.firstDate) / (30 * 24 * 60 * 60 * 1000));
+                    const perMonth = sender.count / monthSpan;
+                    // Trend: compare recent 30d rate vs overall rate
+                    const overallRate = sender.count / Math.max(1, (now - sender.firstDate) / THIRTY_DAYS);
+                    const trendRatio = overallRate > 0 ? sender.recentCount / overallRate : 1;
+                    const trend = trendRatio > 1.3 ? 'up' : trendRatio < 0.7 ? 'down' : 'stable';
+                    const lastAgo = now - sender.lastDate;
+                    const lastLabel = lastAgo < 24 * 60 * 60 * 1000 ? 'Today'
+                      : lastAgo < 7 * 24 * 60 * 60 * 1000 ? `${Math.floor(lastAgo / (24 * 60 * 60 * 1000))}d ago`
+                      : lastAgo < 30 * 24 * 60 * 60 * 1000 ? `${Math.floor(lastAgo / (7 * 24 * 60 * 60 * 1000))}w ago`
+                      : `${Math.floor(lastAgo / (30 * 24 * 60 * 60 * 1000))}mo ago`;
+
+                    return (
+                      <div key={i} className={styles.barChartRow}>
+                        <span className={styles.barChartLabel} title={sender.name}>{sender.name}</span>
+                        <div className={styles.barChartTrack}>
+                          <div
+                            className={styles.barChartFill}
+                            style={{ width: `${(sender.count / maxSenderCount) * 100}%` }}
+                          />
+                        </div>
+                        <span className={styles.barChartValue} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {sender.count}
+                          <span title={`${perMonth.toFixed(1)}/mo · Last: ${lastLabel}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            {trend === 'up' && <TrendingUp size={12} style={{ color: '#ef4444' }} />}
+                            {trend === 'down' && <TrendingDown size={12} style={{ color: '#10b981' }} />}
+                            {trend === 'stable' && <Minus size={12} style={{ color: 'var(--muted)' }} />}
+                          </span>
+                        </span>
                       </div>
-                      <span className={styles.barChartValue}>{sender.count}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {topSenders.length === 0 && (
                     <div style={{ color: 'var(--muted)', fontSize: '0.85rem', padding: '2rem', textAlign: 'center' }}>
                       No data yet — sync your inbox first

@@ -112,6 +112,7 @@ export default function Home() {
             <button
               className={`${styles.navLink} ${activeTab === 'dashboard' ? styles.navLinkActive : ''}`}
               onClick={() => setActiveTab('dashboard')}
+              aria-label="Overview dashboard"
             >
               <LayoutDashboard size={18} />
               <span className={styles.navLabel}>Overview</span>
@@ -119,6 +120,7 @@ export default function Home() {
             <button
               className={`${styles.navLink} ${activeTab === 'newsletters' ? styles.navLinkActive : ''}`}
               onClick={() => setActiveTab('newsletters')}
+              aria-label="Manage subscriptions"
             >
               <Mail size={18} />
               <span className={styles.navLabel}>Subscriptions</span>
@@ -134,6 +136,7 @@ export default function Home() {
             <button
               className={styles.navLink}
               onClick={() => setIsSettingsOpen(true)}
+              aria-label="Open settings"
               style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
             >
               <Settings size={16} />
@@ -143,6 +146,7 @@ export default function Home() {
             <button
               className={styles.navLink}
               onClick={handleLogout}
+              aria-label="Disconnect and clear data"
               style={{ color: '#ef4444', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
             >
               <LogOut size={16} />

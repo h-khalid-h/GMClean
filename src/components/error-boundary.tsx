@@ -32,12 +32,8 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   handleClearAndReload = async () => {
     try {
       // Clear IndexedDB to recover from corrupted data
-      const databases = await window.indexedDB.databases();
-      for (const dbInfo of databases) {
-        if (dbInfo.name) {
-          window.indexedDB.deleteDatabase(dbInfo.name);
-        }
-      }
+      // Use known database name directly — indexedDB.databases() is not supported in Firefox
+      window.indexedDB.deleteDatabase('GMCleanDatabase');
     } catch (e) {
       console.error('Failed to clear IndexedDB:', e);
     }

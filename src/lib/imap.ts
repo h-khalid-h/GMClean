@@ -246,13 +246,13 @@ export async function fetchEmailsChunk(
 }
 
 // Bulk delete messages by UID
-export async function deleteEmailsByUid(config: ImapConfig, uids: number[]): Promise<boolean> {
+export async function deleteEmailsByUid(config: ImapConfig, uids: number[], folder: string = 'INBOX'): Promise<boolean> {
   if (uids.length === 0) return true;
 
   const client = createImapClient(config);
   await client.connect();
 
-  const lock = await client.getMailboxLock('INBOX');
+  const lock = await client.getMailboxLock(folder);
 
   try {
     // Delete messages and expunge them

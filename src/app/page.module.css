@@ -347,6 +347,11 @@
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
 }
 
+.statCardActive {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), 0 8px 24px rgba(124, 58, 237, 0.2);
+}
+
 .statCard::before {
   content: '';
   position: absolute;

@@ -70,11 +70,11 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label="Application Settings" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <div className={styles.drawer} onClick={(e) => e.stopPropagation()} style={{ animation: 'none' }}>
         <div className={styles.drawerHeader}>
           <h2 className={styles.drawerTitle}>Application Settings</h2>
-          <button className={styles.btnClose} onClick={onClose}>
+          <button className={styles.btnClose} onClick={onClose} aria-label="Close settings">
             <X size={24} />
           </button>
         </div>

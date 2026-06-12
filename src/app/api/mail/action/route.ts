@@ -5,6 +5,7 @@ import { deleteEmailsByUid, type ImapConfig } from '@/lib/imap';
 interface ActionPayload {
   action: 'delete' | 'unsubscribe';
   uids?: number[];
+  folder?: string;
   link?: string;
   senderEmail?: string;
 }
@@ -38,9 +39,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No UIDs provided for deletion.' }, { status: 400 });
       }
 
+      // Safety limit to prevent OOM on extremely large batches
+      if (uids.length > 1000) {
+        return NextResponse.json({ error: 'Cannot delete more than 1000 emails at once. Please try in smaller batches.' }, { status: 400 });
+      }
+
       // Convert UIDs to numbers defensively
-      const numericUids = uids.map(uid => Number(uid));
-      await deleteEmailsByUid(config, numericUids);
+      const numericUids = uids.map(uid => Number(uid)).filter(uid => !isNaN(uid));
+      await deleteEmailsByUid(config, numericUids, body.folder || 'INBOX');
 
       return NextResponse.json({ success: true, message: `Successfully deleted ${numericUids.length} emails.` });
     }
@@ -89,6 +95,7 @@ export async function POST(request: NextRequest) {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) GMClean Email Optimizer',
             },
             body: 'List-Unsubscribe=One-Click',
+            signal: AbortSignal.timeout(10000), // 10s timeout
           });
 
           // If POST fails or isn't supported, fall back to a standard GET request
@@ -98,7 +105,8 @@ export async function POST(request: NextRequest) {
               method: 'GET',
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) GMClean Email Optimizer',
-              }
+              },
+              signal: AbortSignal.timeout(10000), // 10s timeout
             });
           }
 

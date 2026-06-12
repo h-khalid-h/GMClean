@@ -19,6 +19,12 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
   const ROWS_PER_PAGE = 50;
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Reset pagination when filter or search changes
+  const handleFilterChange = (filter: typeof activeFilter) => {
+    setActiveFilter(filter);
+    setCurrentPage(1);
+  };
+
   // Sync state
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
@@ -232,6 +238,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
       const decoder = new TextDecoder();
       let buffer = '';
       let cumulativeFetched = 0;
+      let chunkCounter = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -311,6 +318,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
 
             cumulativeFetched = event.progress.fetched;
             setSyncCount(cumulativeFetched);
+            chunkCounter++;
 
             const progressPercent = Math.min(
               100,
@@ -318,13 +326,16 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
             );
             setSyncProgress(progressPercent);
 
-            // Refresh UI with partial sync data
-            await loadEmails();
+            // Debounce UI refresh — only every 3rd chunk to prevent O(n²) table scans
+            if (chunkCounter % 3 === 0) {
+              await loadEmails();
+            }
           }
         }
       }
 
       setSyncMessage('Sync completed successfully!');
+      await loadEmails(); // Final refresh to catch any chunks skipped by debounce
 
       // Check if Gemini API Key is configured for AI Boost
       const geminiKey = localStorage.getItem('gmclean_gemini_api_key');
@@ -474,7 +485,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
       <div className={styles.statsGrid}>
         <div 
           className={`${styles.statCard} ${activeFilter === 'all' ? styles.statCardActive : ''}`} 
-          onClick={() => setActiveFilter('all')}
+          onClick={() => handleFilterChange('all')}
           style={{ cursor: 'pointer', borderLeft: '4px solid #fff' }}
         >
           <span className={styles.statLabel}>Total Scanned</span>
@@ -482,7 +493,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
         </div>
         <div 
           className={`${styles.statCard} ${styles.statNewsletter}`} 
-          onClick={() => setActiveFilter('newsletter')}
+          onClick={() => handleFilterChange('newsletter')}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Newsletters</span>
@@ -490,7 +501,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
         </div>
         <div 
           className={`${styles.statCard} ${styles.statTransaction}`} 
-          onClick={() => setActiveFilter('transaction')}
+          onClick={() => handleFilterChange('transaction')}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Transactions</span>
@@ -498,7 +509,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
         </div>
         <div 
           className={`${styles.statCard} ${styles.statSocial}`} 
-          onClick={() => setActiveFilter('social')}
+          onClick={() => handleFilterChange('social')}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Social</span>
@@ -506,7 +517,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
         </div>
         <div 
           className={`${styles.statCard} ${styles.statPersonal}`} 
-          onClick={() => setActiveFilter('personal')}
+          onClick={() => handleFilterChange('personal')}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Personal / Other</span>
@@ -660,7 +671,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
             <button
               key={filter}
               className={`${styles.tab} ${activeFilter === filter ? styles.tabActive : ''}`}
-              onClick={() => setActiveFilter(filter)}
+              onClick={() => handleFilterChange(filter)}
               style={{ padding: '6px 12px', fontSize: '0.8rem', textTransform: 'capitalize' }}
             >
               {filter}
@@ -675,7 +686,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
             className={styles.input}
             placeholder="Search subject or sender..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             style={{ paddingLeft: '32px', height: '36px', fontSize: '0.85rem' }}
           />
         </div>
@@ -734,7 +745,7 @@ ${JSON.stringify(batch.map(e => ({ uid: e.uid, sender: `${e.senderName} <${e.sen
                             onClick={async (e) => {
                               if (!email.unsubscribeLink?.startsWith('mailto:')) {
                                 e.preventDefault();
-                                window.open(email.unsubscribeLink, '_blank');
+                                window.open(email.unsubscribeLink, '_blank', 'noopener,noreferrer');
                               }
                             }}
                             className={`${styles.btn} ${styles.btnSecondary}`}

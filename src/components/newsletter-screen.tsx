@@ -223,9 +223,9 @@ export default function NewsletterScreen({ userEmail }: NewsletterScreenProps) {
             </p>
             <div style={{ display: 'flex', gap: '0.6rem' }}>
               <a
-                href={manualLink.url}
+                href={manualLink.url.startsWith('http://') || manualLink.url.startsWith('https://') ? manualLink.url : '#'}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className={`${styles.btn} ${styles.btnPrimary}`}
                 onClick={() => setManualLink(null)}
                 style={{ flex: 1 }}

@@ -122,10 +122,14 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
               <option value="500">500 emails (default)</option>
               <option value="1000">1,000 emails</option>
               <option value="2000">2,000 emails</option>
-              <option value="5000">5,000 emails (slowest)</option>
+              <option value="5000">5,000 emails</option>
+              <option value="0">All emails (complete scan)</option>
             </select>
-            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-              Maximum number of emails to fetch during each sync. Higher limits take longer.
+            <span style={{ fontSize: '0.75rem', color: syncLimit === '0' ? '#f59e0b' : 'var(--muted)' }}>
+              {syncLimit === '0'
+                ? '⚠️ Warning: Full scan may take several minutes for large mailboxes.'
+                : 'Maximum number of emails to fetch during each sync. Higher limits take longer.'
+              }
             </span>
           </div>
         </div>

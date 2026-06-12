@@ -206,7 +206,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
     const CHUNK_SIZE = 100;
     let storedLimit: string | null = null;
     try { storedLimit = localStorage.getItem('gmclean_sync_limit'); } catch { /* localStorage may be disabled */ }
-    const MAX_EMAILS_TO_SYNC = storedLimit ? parseInt(storedLimit, 10) || 500 : 500;
+    const MAX_EMAILS_TO_SYNC = storedLimit === '0' ? 999999 : (storedLimit ? parseInt(storedLimit, 10) || 500 : 500);
 
     try {
       const response = await fetch(

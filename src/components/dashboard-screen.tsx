@@ -912,6 +912,69 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
                 </div>
               </div>
             </div>
+
+            {/* Age Distribution */}
+            {(() => {
+              const now = Date.now();
+              const buckets = [
+                { label: 'Under 30d', max: 30 },
+                { label: '1\u20133 months', max: 90 },
+                { label: '3\u20136 months', max: 180 },
+                { label: '6\u201312 months', max: 365 },
+                { label: 'Over 1 year', max: Infinity },
+              ];
+              const bucketColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
+
+              const results = buckets.map((b, i) => {
+                const prev = i === 0 ? 0 : buckets[i - 1].max;
+                const count = emails.filter(e => {
+                  const age = (now - new Date(e.date).getTime()) / (24 * 60 * 60 * 1000);
+                  return age >= prev && (b.max === Infinity ? true : age < b.max);
+                }).length;
+                const nlCount = emails.filter(e => {
+                  const age = (now - new Date(e.date).getTime()) / (24 * 60 * 60 * 1000);
+                  return e.category === 'newsletter' && e.deleted === 0 && age >= prev && (b.max === Infinity ? true : age < b.max);
+                }).length;
+                return { ...b, count, nlCount, color: bucketColors[i] };
+              });
+
+              const maxBucket = Math.max(1, ...results.map(r => r.count));
+
+              return (
+                <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '16px', padding: '1.2rem', marginTop: '1rem' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <FolderOpen size={16} style={{ color: 'var(--primary)' }} />
+                    Email Age Distribution
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {results.map((r, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                        <span style={{ width: '90px', flexShrink: 0, color: 'var(--muted-light)', fontSize: '0.75rem' }}>{r.label}</span>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: '4px', height: '20px', overflow: 'hidden', position: 'relative' }}>
+                          <div style={{
+                            width: `${(r.count / maxBucket) * 100}%`,
+                            background: r.color,
+                            height: '100%',
+                            borderRadius: '4px',
+                            opacity: 0.7,
+                            transition: 'width 0.6s ease',
+                            minWidth: r.count > 0 ? '4px' : '0',
+                          }} />
+                        </div>
+                        <span style={{ width: '45px', textAlign: 'right', flexShrink: 0, fontWeight: 600, fontSize: '0.75rem' }}>
+                          {r.count.toLocaleString()}
+                        </span>
+                        {r.nlCount > 20 && r.max >= 180 && (
+                          <span style={{ fontSize: '0.65rem', color: 'var(--muted)', flexShrink: 0 }}>
+                            ({r.nlCount} newsletters)
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         );
       })()}

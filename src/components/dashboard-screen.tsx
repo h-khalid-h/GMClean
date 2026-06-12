@@ -474,6 +474,10 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         <div 
           className={`${styles.statCard} ${activeFilter === 'all' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('all')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFilterChange('all'); } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={activeFilter === 'all'}
           style={{ cursor: 'pointer', borderLeft: '4px solid #fff' }}
         >
           <span className={styles.statLabel}>Total Scanned</span>
@@ -482,6 +486,10 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         <div 
           className={`${styles.statCard} ${styles.statNewsletter} ${activeFilter === 'newsletter' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('newsletter')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFilterChange('newsletter'); } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={activeFilter === 'newsletter'}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Newsletters</span>
@@ -490,6 +498,10 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         <div 
           className={`${styles.statCard} ${styles.statTransaction} ${activeFilter === 'transaction' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('transaction')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFilterChange('transaction'); } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={activeFilter === 'transaction'}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Transactions</span>
@@ -498,6 +510,10 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         <div 
           className={`${styles.statCard} ${styles.statSocial} ${activeFilter === 'social' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('social')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFilterChange('social'); } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={activeFilter === 'social'}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Social</span>
@@ -506,12 +522,38 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
         <div 
           className={`${styles.statCard} ${styles.statPersonal} ${activeFilter === 'personal' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('personal')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleFilterChange('personal'); } }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={activeFilter === 'personal'}
           style={{ cursor: 'pointer' }}
         >
           <span className={styles.statLabel}>Personal / Other</span>
           <span className={styles.statValue} style={{ color: 'var(--category-personal)' }}>{stats.personal}</span>
         </div>
       </div>
+
+      {/* First-run prompt */}
+      {stats.total === 0 && !syncing && (
+        <div style={{
+          padding: '2.5rem', textAlign: 'center', background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+          borderRadius: '16px', marginBottom: '1.5rem',
+        }}>
+          <RefreshCw size={40} style={{ opacity: 0.2, marginBottom: '1rem', color: 'var(--primary)' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No emails scanned yet</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
+            Select a folder above and click &ldquo;Sync&rdquo; to scan your mailbox. Only email headers are fetched &mdash; never the body content.
+          </p>
+          <button
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={startSync}
+            disabled={syncing}
+            style={{ width: 'auto', padding: '10px 24px' }}
+          >
+            <RefreshCw size={16} /> Sync {selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder} Now
+          </button>
+        </div>
+      )}
 
       {/* ====== ANALYTICS DASHBOARD ====== */}
       {stats.total > 0 && (() => {
@@ -541,10 +583,10 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
 
         // SVG donut chart data
         const categories = [
-          { label: 'Newsletters', value: stats.newsletters, color: '#f59e0b' },
-          { label: 'Transactions', value: stats.transactions, color: '#3b82f6' },
-          { label: 'Social', value: stats.social, color: '#ec4899' },
-          { label: 'Personal', value: stats.personal, color: '#10b981' },
+          { label: 'Newsletters', value: stats.newsletters, color: '#8b5cf6' },
+          { label: 'Transactions', value: stats.transactions, color: '#10b981' },
+          { label: 'Social', value: stats.social, color: '#3b82f6' },
+          { label: 'Personal', value: stats.personal, color: '#f59e0b' },
         ];
         const total = stats.total || 1;
         let cumulativeAngle = 0;
@@ -577,7 +619,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
                 <div className={styles.quickStatValue}>{newsletterPct}%</div>
                 <div className={styles.quickStatLabel}>Newsletter Ratio</div>
               </div>
-              <div className={styles.quickStat}>
+              <div className={styles.quickStat} title={topSenders.length > 0 ? topSenders[0][1].name : undefined}>
                 <div className={styles.quickStatValue} style={{ fontSize: '1rem' }}>
                   {topSenders.length > 0 ? topSenders[0][1].name.slice(0, 14) : '—'}
                 </div>
@@ -595,7 +637,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
               <div className={styles.donutCard}>
                 <h3>Category Breakdown</h3>
                 <div className={styles.donutWrapper}>
-                  <svg viewBox="0 0 180 180" width="180" height="180">
+                  <svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label={`Email breakdown: ${stats.newsletters} newsletters, ${stats.transactions} transactions, ${stats.social} social, ${stats.personal} personal`}>
                     {arcs.length === 1 ? (
                       <circle cx="90" cy="90" r="70" fill="none" stroke={arcs[0].color} strokeWidth="20" />
                     ) : (
@@ -606,7 +648,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
                           fill="none"
                           stroke={arc.color}
                           strokeWidth="20"
-                          strokeLinecap="round"
+                          strokeLinecap="butt"
                         />
                       ))
                     )}
@@ -653,8 +695,8 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           </>
         );
       })()}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           {(['all', 'newsletter', 'transaction', 'social', 'personal'] as const).map(filter => (
             <button
               key={filter}
@@ -666,13 +708,14 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
             </button>
           ))}
         </div>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '300px' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: '1 1 200px', maxWidth: '300px', minWidth: '150px' }}>
           <Search size={16} style={{ position: 'absolute', left: '10px', color: 'var(--muted)' }} />
           <input
             type="text"
             autoComplete="off"
             className={styles.input}
             placeholder="Search subject or sender..."
+            aria-label="Search emails by subject or sender"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             style={{ paddingLeft: '32px', height: '36px', fontSize: '0.85rem' }}

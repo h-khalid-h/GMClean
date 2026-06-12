@@ -15,6 +15,7 @@ interface GroupedSender {
   senderEmail: string;
   senderName: string;
   count: number;
+  firstReceived: Date;
   lastReceived: Date;
   unsubscribeLink?: string;
   uids: number[];
@@ -69,6 +70,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
             senderEmail: email.senderEmail || 'unknown@unknown.com',
             senderName: email.senderName || 'Unknown',
             count: 0,
+            firstReceived: email.date,
             lastReceived: email.date,
             unsubscribeLink: email.unsubscribeLink,
             uids: [],
@@ -85,6 +87,9 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
         const emailTime = new Date(email.date).getTime();
         if (emailTime > new Date(group.lastReceived).getTime()) {
           group.lastReceived = email.date;
+        }
+        if (emailTime < new Date(group.firstReceived).getTime()) {
+          group.firstReceived = email.date;
         }
         
         if (!group.unsubscribeLink && email.unsubscribeLink) {
@@ -452,14 +457,17 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
       return val;
     };
 
-    const headers = ['Sender Name', 'Sender Email', 'Email Count', 'Last Received', 'Unsubscribe Link', 'Status', 'Unsubscribed Date'];
+    const headers = ['Sender Name', 'Sender Email', 'Category', 'Email Count', 'First Received', 'Last Received', 'Unsubscribe Link', 'Status', 'Still Sending', 'Unsubscribed Date'];
     const rows = selected.map(s => [
       escapeCSV(s.senderName),
       escapeCSV(s.senderEmail),
+      'Newsletter',
       s.count.toString(),
+      new Date(s.firstReceived).toISOString().split('T')[0],
       new Date(s.lastReceived).toISOString().split('T')[0],
       escapeCSV(s.unsubscribeLink || ''),
       s.unsubscribed ? 'Unsubscribed' : 'Active',
+      s.stillSending ? 'Yes' : 'No',
       s.unsubscribedAt ? new Date(s.unsubscribedAt).toISOString().split('T')[0] : '',
     ]);
 

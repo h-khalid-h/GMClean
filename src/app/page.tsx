@@ -226,7 +226,7 @@ export default function Home() {
             </button>
 
             <span className={styles.navLabel} style={{ fontSize: '0.65rem', color: 'var(--muted)', textAlign: 'center', opacity: 0.5, marginTop: '0.25rem' }}>
-              v1.1.0
+              v2.0.0
             </span>
           </div>
         </aside>
@@ -242,6 +242,7 @@ export default function Home() {
 
           {activeTab === 'dashboard' ? (
             <DashboardScreen
+              key={session.user}
               userEmail={session.user}
               mailboxHost={session.host}
               onQuickClean={(senderEmails) => {
@@ -251,6 +252,7 @@ export default function Home() {
             />
           ) : (
             <NewsletterScreen 
+              key={session.user}
               userEmail={session.user}
               preselectedSenders={preselectedSenders}
               onPreselectedConsumed={() => setPreselectedSenders([])}

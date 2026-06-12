@@ -2,6 +2,8 @@
 
 **Google, Microsoft Clean — Self-hosted tool that scans your inbox, classifies emails, and lets you mass-unsubscribe, bulk-delete, and export — without ever sharing your data.**
 
+**v2.0** — Now with Multi-Account support, Inbox Health Score, and Sender Insights.
+
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react)
@@ -29,6 +31,10 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 | | Feature | Description |
 |---|---|---|
 | 🔒 | **Privacy-First Scanning** | Headers-only analysis — email bodies are never downloaded |
+| 👥 | **Multi-Account** | Connect up to 10 mailboxes (Gmail, Outlook, custom IMAP) simultaneously |
+| 📊 | **Inbox Health Score** | 0-100 hygiene score with 5 weighted factors and actionable recommendations |
+| 📈 | **Sender Insights** | Trend arrows, frequency, and last activity for every top sender |
+| 📅 | **Email Age Distribution** | Color-coded age breakdown to identify cleanup opportunities |
 | 📊 | **Inbox Analytics** | Interactive donut charts, top senders, newsletter-to-personal ratio |
 | 📁 | **Multi-Folder Scanning** | INBOX, Spam, Promotions, Trash — any IMAP folder |
 | ☑️ | **Multi-Select & Bulk Actions** | Select individual senders or Select All with a floating action bar |
@@ -39,6 +45,7 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 | 📥 | **Full Email Export** | Export all scanned emails to CSV for offline review |
 | 🤖 | **AI Smart Boost** | Optional Gemini-powered classification for edge cases |
 | 🛡️ | **Unsubscribe Tracking** | Detects senders who ignore your unsubscribe request |
+| ⚡ | **Quick Clean** | One-click cleanup of stale senders from Health Score recommendations |
 | 🔑 | **Flexible Auth** | App Password + OAuth2 (Google, Microsoft) |
 | 📱 | **Responsive Design** | Fully functional on desktop, tablet, and mobile |
 | 💾 | **100% Local Storage** | All data stored in IndexedDB — nothing in the cloud |
@@ -116,11 +123,13 @@ flowchart LR
     G -->|IMAP Commands| A
 ```
 
-1. **Connect** via IMAP using an App Password or OAuth2
+1. **Connect** via IMAP using an App Password or OAuth2 (up to 10 accounts)
 2. **Fetch** email headers only — subject, sender, `List-Unsubscribe` (NO body content)
 3. **Classify** using heuristic rules + optional Gemini AI for ambiguous cases
-4. **Store** results locally in IndexedDB (your browser, your machine)
-5. **Act** — multi-select senders, bulk-unsubscribe, bulk-delete, or export to CSV
+4. **Score** your inbox health across 5 hygiene factors (0-100)
+5. **Store** results locally in IndexedDB (your browser, your machine)
+6. **Act** — multi-select senders, bulk-unsubscribe, bulk-delete, or export to CSV
+7. **Switch** between accounts instantly from the sidebar
 
 ---
 

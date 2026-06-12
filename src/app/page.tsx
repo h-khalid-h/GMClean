@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User } from 'lucide-react';
+import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User, Sun, Moon } from 'lucide-react';
 import ConnectionScreen from '@/components/connection-screen';
 import DashboardScreen from '@/components/dashboard-screen';
 import NewsletterScreen from '@/components/newsletter-screen';
@@ -19,6 +19,24 @@ export default function Home() {
   const [preselectedSenders, setPreselectedSenders] = useState<string[]>([]);
   const [accounts, setAccounts] = useState<{ index: number; user: string; host: string }[]>([]);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Load saved theme on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gmclean_theme') as 'dark' | 'light' | null;
+      const initial = saved || 'dark';
+      setTheme(initial);
+      document.documentElement.setAttribute('data-theme', initial);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('gmclean_theme', next);
+  };
 
   // Check if session exists on load
   const checkSession = useCallback(async () => {
@@ -223,6 +241,16 @@ export default function Home() {
             >
               <LogOut size={16} />
               <span className={styles.navLabel}>Disconnect</span>
+            </button>
+
+            <button
+              className={styles.navLink}
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              <span className={styles.navLabel}>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
             </button>
 
             <span className={styles.navLabel} style={{ fontSize: '0.65rem', color: 'var(--muted)', textAlign: 'center', opacity: 0.5, marginTop: '0.25rem' }}>

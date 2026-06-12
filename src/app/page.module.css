@@ -1234,3 +1234,59 @@
     padding: 5px 10px !important;
   }
 }
+
+/* ========== Light Theme Module Overrides ========== */
+:global([data-theme="light"]) .sidebar {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+}
+
+:global([data-theme="light"]) .brand {
+  background: linear-gradient(135deg, #1e293b 30%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+:global([data-theme="light"]) .connectWrapper {
+  background-image: radial-gradient(circle at center, rgba(124, 58, 237, 0.06) 0%, transparent 70%);
+}
+
+:global([data-theme="light"]) .overlay {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+:global([data-theme="light"]) .drawer {
+  background: #f8fafc;
+  border-left-color: var(--border);
+}
+
+:global([data-theme="light"]) .statsCard {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+:global([data-theme="light"]) .table th {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--muted);
+}
+
+:global([data-theme="light"]) .selectionBar {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+}
+
+:global([data-theme="light"]) .tab {
+  color: var(--muted);
+}
+
+:global([data-theme="light"]) .tabActive {
+  color: var(--foreground);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+:global([data-theme="light"]) .input,
+:global([data-theme="light"]) .select {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--foreground);
+}
+

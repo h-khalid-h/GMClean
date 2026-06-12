@@ -85,7 +85,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
 
   // Folder selection state
   const [folders, setFolders] = useState<string[]>(['INBOX']);
-  const [selectedFolder, setSelectedFolder] = useState('INBOX');
+  const [selectedFolder, setSelectedFolder] = useState('__ALL__');
   const [foldersLoading, setFoldersLoading] = useState(false);
 
   // Load and calculate stats from IndexedDB
@@ -200,134 +200,104 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
     }
   };
 
-  // Sync Inbox using streaming (single IMAP connection)
+  // Sync a single folder using streaming (single IMAP connection)
+  const syncFolder = async (folder: string, limitOverride?: number): Promise<number> => {
+    const CHUNK_SIZE = 100;
+    let storedLimit: string | null = null;
+    try { storedLimit = localStorage.getItem('gmclean_sync_limit'); } catch { /* */ }
+    const MAX = limitOverride ?? (storedLimit === '0' ? 999999 : (storedLimit ? parseInt(storedLimit, 10) || 500 : 500));
+    const res = await fetch(`/api/mail/sync-stream?totalLimit=${MAX}&chunkSize=${CHUNK_SIZE}&folder=${encodeURIComponent(folder)}`, { method: 'POST' });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Streaming sync failed.'); }
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response stream available.');
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let cumulativeFetched = 0;
+    let chunkCounter = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6);
+        type ChunkEmail = { uid: number; messageId: string; senderName: string; senderEmail: string; subject: string; date: string; category: 'newsletter' | 'transaction' | 'social' | 'personal'; unsubscribeLink?: string };
+        type SseEvent = { type: 'chunk'; emails: ChunkEmail[]; progress: { fetched: number; total: number } } | { type: 'done' } | { type: 'error'; error: string };
+        let event: SseEvent;
+        try { event = JSON.parse(jsonStr); } catch { continue; }
+        if (event.type === 'error') throw new Error(event.error);
+        if (event.type === 'done') break;
+        if (event.type === 'chunk') {
+          const fetchedEmails = event.emails;
+          const totalInMailbox = event.progress.total;
+          setSyncTotal(Math.min(totalInMailbox, MAX));
+          setSyncMessage(`Fetching emails ${cumulativeFetched} to ${cumulativeFetched + fetchedEmails.length}...`);
+          const existingKeys = fetchedEmails.map(e => [userEmail, e.uid] as [string, number]);
+          const existingRecords = await db.emails.bulkGet(existingKeys);
+          const existingMap = new Map<number, EmailRecord>();
+          existingRecords.forEach(r => { if (r) existingMap.set(r.uid, r); });
+          const recordsToSave: EmailRecord[] = fetchedEmails.map((email) => {
+            const existing = existingMap.get(email.uid);
+            return {
+              uid: email.uid, mailbox: userEmail, messageId: email.messageId,
+              senderName: email.senderName, senderEmail: email.senderEmail,
+              subject: email.subject, date: new Date(email.date),
+              category: existing?.category || email.category,
+              unsubscribeLink: email.unsubscribeLink,
+              unsubscribed: existing?.unsubscribed ?? 0,
+              unsubscribedAt: existing?.unsubscribedAt ?? 0,
+              folder: folder, deleted: existing?.deleted ?? 0,
+            };
+          });
+          await db.emails.bulkPut(recordsToSave);
+          cumulativeFetched = event.progress.fetched;
+          setSyncCount(cumulativeFetched);
+          chunkCounter++;
+          const pct = Math.min(100, Math.round((cumulativeFetched / Math.min(totalInMailbox, MAX)) * 100));
+          setSyncProgress(pct);
+          if (chunkCounter % 3 === 0) await loadEmails();
+        }
+      }
+    }
+    await loadEmails();
+    return cumulativeFetched;
+  };
+
   const startSync = async () => {
     if (syncing) return;
     setSyncing(true);
     setSyncProgress(0);
     setSyncCount(0);
-    setSyncMessage('Establishing connection to mailbox...');
-
-    const CHUNK_SIZE = 100;
-    let storedLimit: string | null = null;
-    try { storedLimit = localStorage.getItem('gmclean_sync_limit'); } catch { /* localStorage may be disabled */ }
-    const MAX_EMAILS_TO_SYNC = storedLimit === '0' ? 999999 : (storedLimit ? parseInt(storedLimit, 10) || 500 : 500);
 
     try {
-      const response = await fetch(
-        `/api/mail/sync-stream?totalLimit=${MAX_EMAILS_TO_SYNC}&chunkSize=${CHUNK_SIZE}&folder=${encodeURIComponent(selectedFolder)}`,
-        { method: 'POST' }
-      );
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Streaming sync failed.');
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response stream available.');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let cumulativeFetched = 0;
-      let chunkCounter = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE messages (delimited by double newlines)
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() || '';
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith('data: ')) continue;
-
-          const jsonStr = line.slice(6);
-          let event: 
-            | { type: 'chunk'; emails: Array<{
-                uid: number; messageId: string; senderName: string;
-                senderEmail: string; subject: string; date: string;
-                category: 'newsletter' | 'transaction' | 'social' | 'personal';
-                unsubscribeLink?: string;
-              }>; progress: { fetched: number; total: number } }
-            | { type: 'done' }
-            | { type: 'error'; error: string };
+      if (selectedFolder === '__ALL__') {
+        // Sync all folders sequentially
+        const foldersToSync = folders.filter(f => f !== '__ALL__');
+        let totalSynced = 0;
+        for (let i = 0; i < foldersToSync.length; i++) {
+          const f = foldersToSync[i];
+          setSyncMessage(`Syncing folder ${i + 1}/${foldersToSync.length}: ${f}...`);
+          setSyncProgress(Math.round((i / foldersToSync.length) * 100));
           try {
-            event = JSON.parse(jsonStr);
-          } catch {
-            console.warn('Skipping malformed SSE event:', jsonStr.slice(0, 100));
-            continue;
-          }
-
-          if (event.type === 'error') {
-            throw new Error(event.error);
-          }
-
-          if (event.type === 'done') {
-            break;
-          }
-
-          if (event.type === 'chunk') {
-            const fetchedEmails = event.emails;
-            const totalInMailbox = event.progress.total;
-            setSyncTotal(Math.min(totalInMailbox, MAX_EMAILS_TO_SYNC));
-
-            setSyncMessage(`Fetching emails ${cumulativeFetched} to ${cumulativeFetched + fetchedEmails.length}...`);
-
-            // Merge with existing records to preserve local flags (unsubscribed, deleted, AI category)
-            const existingKeys = fetchedEmails.map(e => [userEmail, e.uid] as [string, number]);
-            const existingRecords = await db.emails.bulkGet(existingKeys);
-            const existingMap = new Map<number, EmailRecord>();
-            existingRecords.forEach(r => { if (r) existingMap.set(r.uid, r); });
-
-            const recordsToSave: EmailRecord[] = fetchedEmails.map((email) => {
-              const existing = existingMap.get(email.uid);
-              return {
-                uid: email.uid,
-                mailbox: userEmail,
-                messageId: email.messageId,
-                senderName: email.senderName,
-                senderEmail: email.senderEmail,
-                subject: email.subject,
-                date: new Date(email.date),
-                // Preserve AI-assigned category if it differs from heuristic
-                category: existing?.category || email.category,
-                unsubscribeLink: email.unsubscribeLink,
-                // Preserve local flags from previous syncs
-                unsubscribed: existing?.unsubscribed ?? 0,
-                unsubscribedAt: existing?.unsubscribedAt ?? 0,
-                folder: selectedFolder,
-                deleted: existing?.deleted ?? 0,
-              };
-            });
-
-            // Bulk save/overwrite to IndexedDB
-            await db.emails.bulkPut(recordsToSave);
-
-            cumulativeFetched = event.progress.fetched;
-            setSyncCount(cumulativeFetched);
-            chunkCounter++;
-
-            const progressPercent = Math.min(
-              100,
-              Math.round((cumulativeFetched / Math.min(totalInMailbox, MAX_EMAILS_TO_SYNC)) * 100)
-            );
-            setSyncProgress(progressPercent);
-
-            // Debounce UI refresh — only every 3rd chunk to prevent O(n²) table scans
-            if (chunkCounter % 3 === 0) {
-              await loadEmails();
-            }
+            const count = await syncFolder(f);
+            totalSynced += count;
+            setSyncCount(totalSynced);
+          } catch (err) {
+            console.warn(`Skipping folder ${f}:`, err);
+            // Continue with next folder even if one fails
           }
         }
+        setSyncMessage(`All folders synced! ${totalSynced} emails total.`);
+      } else {
+        setSyncMessage('Establishing connection to mailbox...');
+        await syncFolder(selectedFolder);
+        setSyncMessage('Sync completed successfully!');
       }
 
-      setSyncMessage('Sync completed successfully!');
-      await loadEmails(); // Final refresh to catch any chunks skipped by debounce
+      await loadEmails();
 
       // Check if Gemini API Key is configured for AI Boost
       const geminiKey = localStorage.getItem('gmclean_gemini_api_key');
@@ -487,6 +457,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
               onChange={(e) => setSelectedFolder(e.target.value)}
               disabled={syncing || foldersLoading}
             >
+              <option value="__ALL__">All Folders</option>
               {folders.map(f => (
                 <option key={f} value={f}>{f}</option>
               ))}
@@ -499,7 +470,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
             style={{ width: 'auto' }}
           >
             <RefreshCw size={16} className={syncing ? styles.loader : ''} />
-            Sync {selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder}
+            Sync {selectedFolder === '__ALL__' ? 'All Folders' : selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder}
           </button>
           {autoSyncActive && nextAutoSync && !syncing && (
             <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }} title="Auto-sync enabled">
@@ -593,7 +564,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
           <RefreshCw size={40} style={{ opacity: 0.2, marginBottom: '1rem', color: 'var(--primary)' }} />
           <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No emails scanned yet</h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
-            Select a folder above and click &ldquo;Sync&rdquo; to scan your mailbox. Only email headers are fetched &mdash; never the body content.
+            Click &ldquo;Sync All Folders&rdquo; to scan your entire mailbox, or pick a specific folder. Only email headers are fetched &mdash; never the body content.
           </p>
           <button
             className={`${styles.btn} ${styles.btnPrimary}`}
@@ -601,7 +572,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
             disabled={syncing}
             style={{ width: 'auto', padding: '10px 24px' }}
           >
-            <RefreshCw size={16} /> Sync {selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder} Now
+            <RefreshCw size={16} /> Sync {selectedFolder === '__ALL__' ? 'All Folders' : selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder} Now
           </button>
         </div>
       )}

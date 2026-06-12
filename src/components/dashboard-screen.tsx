@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download, Activity, ShieldCheck, Lightbulb, TrendingDown, TrendingUp, AlertTriangle, Sparkles, Minus } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { RefreshCw, Search, Trash2, ExternalLink, Mail, CheckCircle, AlertCircle, FolderOpen, Download, Activity, ShieldCheck, Lightbulb, TrendingDown, TrendingUp, AlertTriangle, Sparkles, Minus, Timer } from 'lucide-react';
 import { db, type EmailRecord } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -32,6 +32,10 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
   const [syncTotal, setSyncTotal] = useState(0);
   const [syncCount, setSyncCount] = useState(0);
   const [syncMessage, setSyncMessage] = useState('');
+  const [autoSyncActive, setAutoSyncActive] = useState(false);
+  const [nextAutoSync, setNextAutoSync] = useState<string | null>(null);
+  const autoSyncRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   
   // Export emails to CSV
   const exportCSV = () => {
@@ -343,6 +347,47 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
     }
   };
 
+  // Auto-sync interval
+  useEffect(() => {
+    // Clean up previous intervals
+    if (autoSyncRef.current) { clearInterval(autoSyncRef.current); autoSyncRef.current = null; }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+
+    let intervalMinutes = 0;
+    try { intervalMinutes = parseInt(localStorage.getItem('gmclean_auto_sync') || '0', 10) || 0; } catch { /* */ }
+
+    if (intervalMinutes > 0) {
+      setAutoSyncActive(true);
+      const intervalMs = intervalMinutes * 60 * 1000;
+      let nextTime = Date.now() + intervalMs;
+
+      const updateCountdown = () => {
+        const remaining = Math.max(0, Math.ceil((nextTime - Date.now()) / 1000));
+        if (remaining > 60) {
+          setNextAutoSync(`${Math.ceil(remaining / 60)}m`);
+        } else {
+          setNextAutoSync(`${remaining}s`);
+        }
+      };
+      updateCountdown();
+      countdownRef.current = setInterval(updateCountdown, 5000);
+
+      autoSyncRef.current = setInterval(() => {
+        nextTime = Date.now() + intervalMs;
+        startSync();
+      }, intervalMs);
+    } else {
+      setAutoSyncActive(false);
+      setNextAutoSync(null);
+    }
+
+    return () => {
+      if (autoSyncRef.current) clearInterval(autoSyncRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]);
+
   // Delete an individual email
   const handleDeleteEmail = async (uid: number) => {
     setActionLoadingId(uid);
@@ -456,6 +501,11 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
             <RefreshCw size={16} className={syncing ? styles.loader : ''} />
             Sync {selectedFolder === 'INBOX' ? 'Inbox' : selectedFolder}
           </button>
+          {autoSyncActive && nextAutoSync && !syncing && (
+            <span style={{ fontSize: '0.7rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }} title="Auto-sync enabled">
+              <Timer size={12} /> Next: {nextAutoSync}
+            </span>
+          )}
           {emails.length > 0 && (
             <button
               className={`${styles.btn} ${styles.btnSecondary}`}

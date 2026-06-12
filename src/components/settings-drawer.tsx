@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Key, Shield, HelpCircle, Trash2, ScanLine } from 'lucide-react';
+import { X, Save, Key, Shield, HelpCircle, Trash2, ScanLine, Timer } from 'lucide-react';
 import { db } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -17,6 +17,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
   const [msClientSecret, setMsClientSecret] = useState('');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [syncLimit, setSyncLimit] = useState('500');
+  const [autoSyncInterval, setAutoSyncInterval] = useState('0');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [clearStatus, setClearStatus] = useState<'idle' | 'cleared'>('idle');
   const [activeGuide, setActiveGuide] = useState<'gmail' | 'outlook' | 'yahoo'>('gmail');
@@ -31,6 +32,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
         setMsClientSecret(localStorage.getItem('gmclean_ms_client_secret') || '');
         setGeminiApiKey(localStorage.getItem('gmclean_gemini_api_key') || '');
         setSyncLimit(localStorage.getItem('gmclean_sync_limit') || '500');
+        setAutoSyncInterval(localStorage.getItem('gmclean_auto_sync') || '0');
       }, 0);
     }
   }, [isOpen]);
@@ -43,6 +45,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
       localStorage.setItem('gmclean_ms_client_secret', msClientSecret);
       localStorage.setItem('gmclean_gemini_api_key', geminiApiKey);
       localStorage.setItem('gmclean_sync_limit', syncLimit);
+      localStorage.setItem('gmclean_auto_sync', autoSyncInterval);
 
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -115,6 +118,29 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
               {syncLimit === '0'
                 ? '\u26a0\ufe0f Warning: Full scan may take several minutes for large mailboxes.'
                 : 'Maximum number of emails to fetch during each sync. Higher limits take longer.'
+              }
+            </span>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Timer size={14} /> Auto-Sync Interval
+            </label>
+            <select
+              className={styles.select}
+              value={autoSyncInterval}
+              onChange={(e) => setAutoSyncInterval(e.target.value)}
+            >
+              <option value="0">Off (manual sync only)</option>
+              <option value="5">Every 5 minutes</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every 60 minutes</option>
+            </select>
+            <span style={{ fontSize: '0.75rem', color: autoSyncInterval !== '0' ? '#10b981' : 'var(--muted)' }}>
+              {autoSyncInterval !== '0'
+                ? `\u2705 Auto-sync will run every ${autoSyncInterval} minutes while the dashboard is open.`
+                : 'Enable to automatically re-scan your inbox at regular intervals.'
               }
             </span>
           </div>

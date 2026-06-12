@@ -1044,6 +1044,32 @@
     padding-bottom: 90px; /* offset bottom bar height */
     max-height: calc(100vh - 70px);
   }
+  /* Bump selection bar above mobile nav */
+  .selectionBar {
+    bottom: 70px;
+    z-index: 51;
+    padding: 0.6rem 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  .selectionBarCount {
+    text-align: center;
+    font-size: 0.8rem;
+    min-width: auto;
+  }
+  .selectionBarActions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  /* Sender cards: single column on mobile */
+  .senderGrid {
+    grid-template-columns: 1fr;
+  }
+  /* Connection card: constrain width */
+  .connectCard {
+    max-width: 95vw;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1052,5 +1078,9 @@
   }
   .navLink {
     padding: 0.75rem !important;
+  }
+  .selectionBarActions .btn {
+    font-size: 0.7rem !important;
+    padding: 5px 10px !important;
   }
 }

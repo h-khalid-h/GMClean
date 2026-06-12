@@ -155,7 +155,7 @@ export default function ConnectionScreen({ onConnectSuccess, onOpenSettings, ini
             <Cpu size={32} />
           </div>
           <h1 className={styles.title}>Connect Mailbox</h1>
-          <p className={styles.subtitle}>Analyze and unsubscribe from newsletters privately</p>
+          <p className={styles.subtitle}>Clean up your inbox privately — unsubscribe, delete, and organize</p>
         </div>
 
         {error && (
@@ -312,7 +312,7 @@ export default function ConnectionScreen({ onConnectSuccess, onOpenSettings, ini
         <div className={styles.infoBox} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
           <Shield size={18} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
           <span>
-            <strong>Privacy Guarantee:</strong> GMClean is entirely database-less and local-first. Your email details are encrypted in your browser and never saved on our servers.
+            <strong>Privacy Guarantee:</strong> GMClean is entirely database-less and local-first. Your email details are encrypted in your browser and never stored on any external server.
           </span>
         </div>
       </div>

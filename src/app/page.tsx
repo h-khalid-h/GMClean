@@ -54,7 +54,7 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
-    const confirmLogout = window.confirm('Are you sure you want to logout? This will clear your credentials and delete all scanned metadata stored locally in this browser.');
+    const confirmLogout = window.confirm('Are you sure you want to disconnect? This will clear your credentials and delete all scanned metadata stored locally in this browser.');
     if (!confirmLogout) return;
 
     try {

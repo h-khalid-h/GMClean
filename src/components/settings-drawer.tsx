@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Key, Shield, HelpCircle, Trash2 } from 'lucide-react';
+import { X, Save, Key, Shield, HelpCircle, Trash2, ScanLine } from 'lucide-react';
 import { db } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -91,25 +91,11 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
           </div>
         )}
 
-        {/* Section 1: AI Settings */}
+        {/* Section 1: Scan Settings */}
         <div className={styles.drawerSection}>
           <h3 className={styles.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Key size={18} /> AI Classification Options
+            <ScanLine size={18} /> Scan Settings
           </h3>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Gemini API Key (Optional)</label>
-            <input
-              type="password"
-              autoComplete="new-password"
-              className={styles.input}
-              placeholder="AI Smart Boost key..."
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-              Enables local AI-powered smart sorting for ambiguous emails (under development).
-            </span>
-          </div>
           <div className={styles.formGroup}>
             <label className={styles.label}>Sync Limit (emails per scan)</label>
             <select
@@ -127,9 +113,30 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
             </select>
             <span style={{ fontSize: '0.75rem', color: syncLimit === '0' ? '#f59e0b' : 'var(--muted)' }}>
               {syncLimit === '0'
-                ? '⚠️ Warning: Full scan may take several minutes for large mailboxes.'
+                ? '\u26a0\ufe0f Warning: Full scan may take several minutes for large mailboxes.'
                 : 'Maximum number of emails to fetch during each sync. Higher limits take longer.'
               }
+            </span>
+          </div>
+        </div>
+
+        {/* Section 2: AI Classification */}
+        <div className={styles.drawerSection}>
+          <h3 className={styles.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Key size={18} /> AI Classification
+          </h3>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>Gemini API Key (Optional)</label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className={styles.input}
+              placeholder="Paste your Gemini API key..."
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+              Enhances email classification accuracy using Gemini AI. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a>.
             </span>
           </div>
         </div>

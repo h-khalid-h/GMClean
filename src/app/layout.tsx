@@ -14,15 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GMClean — Privacy-First Email Newsletter Manager",
-  description: "Self-hosted tool that scans your inbox, classifies emails, and lets you mass-unsubscribe from newsletters — without ever sharing your data. The zero-knowledge alternative to Unroll.me.",
-  keywords: ["email", "newsletter", "unsubscribe", "privacy", "self-hosted", "inbox", "cleanup", "IMAP"],
+  title: "GMClean — Privacy-First Google & Microsoft Email Cleaner",
+  description: "Self-hosted tool that scans your Google and Microsoft inbox, classifies emails, and lets you mass-unsubscribe and bulk-clean — without ever sharing your data. The zero-knowledge alternative to Unroll.me.",
+  keywords: ["email", "newsletter", "unsubscribe", "privacy", "self-hosted", "inbox", "cleanup", "IMAP", "gmail", "outlook", "bulk delete"],
   icons: {
     icon: "/icon.svg",
   },
   openGraph: {
-    title: "GMClean — Privacy-First Email Newsletter Manager",
-    description: "Scan, classify, and mass-unsubscribe from newsletters. 100% local, zero-knowledge, self-hosted.",
+    title: "GMClean — Privacy-First Google & Microsoft Email Cleaner",
+    description: "Scan, classify, bulk-unsubscribe, and clean your inbox. 100% local, zero-knowledge, self-hosted.",
     type: "website",
   },
 };

@@ -3,6 +3,6 @@ services:
     build: .
     ports:
       - '3000:3000'
-    environment:
-      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET}
+    env_file:
+      - .env.local
     restart: unless-stopped

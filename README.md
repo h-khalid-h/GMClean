@@ -1,6 +1,6 @@
-# ✉️ GMClean — Privacy-First Email Newsletter Manager
+# ✉️ GMClean — Privacy-First Google & Microsoft Email Cleaner
 
-**Google, Microsoft Clean — Self-hosted tool that scans your inbox, classifies emails, and lets you mass-unsubscribe from newsletters — without ever sharing your data.**
+**Google, Microsoft Clean — Self-hosted tool that scans your inbox, classifies emails, and lets you mass-unsubscribe, bulk-delete, and export — without ever sharing your data.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
@@ -31,13 +31,16 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 | 🔒 | **Privacy-First Scanning** | Headers-only analysis — email bodies are never downloaded |
 | 📊 | **Inbox Analytics** | Interactive donut charts, top senders, newsletter-to-personal ratio |
 | 📁 | **Multi-Folder Scanning** | INBOX, Spam, Promotions, Trash — any IMAP folder |
+| ☑️ | **Multi-Select & Bulk Actions** | Select individual senders or Select All with a floating action bar |
+| ✉️ | **One-Click Unsubscribe** | RFC 8058 compliant `List-Unsubscribe-Post` support |
+| 🚫 | **Bulk Unsubscribe** | Unsubscribe from multiple senders at once with progress tracking |
+| 🗑️ | **Bulk Delete** | Mass-delete emails by sender — batched for safety (500/batch) |
+| 📤 | **Export Subscriptions** | Export selected senders to CSV with resubscribe links |
+| 📥 | **Full Email Export** | Export all scanned emails to CSV for offline review |
 | 🤖 | **AI Smart Boost** | Optional Gemini-powered classification for edge cases |
 | 🛡️ | **Unsubscribe Tracking** | Detects senders who ignore your unsubscribe request |
-| ✉️ | **One-Click Unsubscribe** | RFC 8058 compliant `List-Unsubscribe-Post` support |
-| 🗑️ | **Bulk Delete** | Mass-delete emails by sender with one click |
-| 📥 | **CSV Export** | Export your email analysis to CSV for offline review |
 | 🔑 | **Flexible Auth** | App Password + OAuth2 (Google, Microsoft) |
-| 📱 | **Responsive Design** | Fully functional on desktop and mobile |
+| 📱 | **Responsive Design** | Fully functional on desktop, tablet, and mobile |
 | 💾 | **100% Local Storage** | All data stored in IndexedDB — nothing in the cloud |
 
 ---
@@ -117,7 +120,7 @@ flowchart LR
 2. **Fetch** email headers only — subject, sender, `List-Unsubscribe` (NO body content)
 3. **Classify** using heuristic rules + optional Gemini AI for ambiguous cases
 4. **Store** results locally in IndexedDB (your browser, your machine)
-5. **Act** — unsubscribe via RFC 8058 or bulk-delete by sender
+5. **Act** — multi-select senders, bulk-unsubscribe, bulk-delete, or export to CSV
 
 ---
 

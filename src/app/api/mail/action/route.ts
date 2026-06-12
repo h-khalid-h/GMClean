@@ -1,0 +1,130 @@
+import { type NextRequest, NextResponse } from 'next/server';
+import { decryptSession } from '@/lib/crypto';
+import { deleteEmailsByUid, type ImapConfig } from '@/lib/imap';
+
+interface ActionPayload {
+  action: 'delete' | 'unsubscribe';
+  uids?: number[];
+  link?: string;
+  senderEmail?: string;
+}
+
+export async function POST(request: NextRequest) {
+  const sessionCookie = request.cookies.get('gmclean_session');
+  
+  if (!sessionCookie?.value) {
+    return NextResponse.json({ error: 'Session expired or not authenticated.' }, { status: 401 });
+  }
+
+  const config = decryptSession<ImapConfig>(sessionCookie.value);
+  if (!config) {
+    return NextResponse.json({ error: 'Invalid session credentials.' }, { status: 401 });
+  }
+
+  try {
+    let body: ActionPayload;
+    try {
+      body = await request.json() as ActionPayload;
+    } catch {
+      return NextResponse.json({ error: 'Invalid or missing JSON payload.' }, { status: 400 });
+    }
+    
+    const { action } = body;
+
+    // 1. ACTION: BULK DELETE
+    if (action === 'delete') {
+      const { uids } = body;
+      if (!Array.isArray(uids) || uids.length === 0) {
+        return NextResponse.json({ error: 'No UIDs provided for deletion.' }, { status: 400 });
+      }
+
+      // Convert UIDs to numbers defensively
+      const numericUids = uids.map(uid => Number(uid));
+      await deleteEmailsByUid(config, numericUids);
+
+      return NextResponse.json({ success: true, message: `Successfully deleted ${numericUids.length} emails.` });
+    }
+
+    // 2. ACTION: UNSUBSCRIBE
+    if (action === 'unsubscribe') {
+      const { link } = body;
+      if (!link || typeof link !== 'string') {
+        return NextResponse.json({ error: 'No unsubscribe link provided or invalid format.' }, { status: 400 });
+      }
+
+      // If mailto:, let the frontend trigger it locally (safest UX for mailto links)
+      if (link.toLowerCase().startsWith('mailto:')) {
+        return NextResponse.json({ 
+          success: true, 
+          protocol: 'mailto', 
+          link 
+        });
+      }
+
+      // If HTTP/HTTPS link, perform server-side fetch
+      if (link.toLowerCase().startsWith('http')) {
+        // SSRF protection: block requests to private/internal networks
+        try {
+          const url = new URL(link);
+          const hostname = url.hostname.toLowerCase();
+          const blockedPatterns = [
+            'localhost', '127.0.0.1', '0.0.0.0', '::1',
+            '169.254.', '10.', '172.16.', '172.17.', '172.18.', '172.19.',
+            '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.',
+            '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',
+            '192.168.',
+          ];
+          if (blockedPatterns.some(p => hostname.startsWith(p) || hostname === p)) {
+            return NextResponse.json({ error: 'Unsubscribe links to internal/private networks are blocked.' }, { status: 400 });
+          }
+        } catch {
+          return NextResponse.json({ error: 'Invalid unsubscribe URL.' }, { status: 400 });
+        }
+        try {
+          // RFC 8058: Attempt one-click unsubscribe via POST with body 'List-Unsubscribe=One-Click'
+          let response = await fetch(link, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) GMClean Email Optimizer',
+            },
+            body: 'List-Unsubscribe=One-Click',
+          });
+
+          // If POST fails or isn't supported, fall back to a standard GET request
+          if (!response.ok) {
+            console.warn(`Unsubscribe POST failed for ${link}, falling back to GET.`);
+            response = await fetch(link, {
+              method: 'GET',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) GMClean Email Optimizer',
+              }
+            });
+          }
+
+          return NextResponse.json({ 
+            success: true, 
+            protocol: 'http', 
+            status: response.status,
+            message: 'Unsubscribe request sent successfully.'
+          });
+        } catch {
+          // Return the link back so the client can click it manually as a fallback
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Server-side request failed. Please unsubscribe manually.', 
+            manualLink: link 
+          }, { status: 200 }); // Status 200 so we don't throw an error alert, just show manual link in UI
+        }
+      }
+
+      return NextResponse.json({ error: 'Unsupported unsubscribe protocol.' }, { status: 400 });
+    }
+
+    return NextResponse.json({ error: 'Invalid action requested.' }, { status: 400 });
+  } catch (err) {
+    console.error('Mail action endpoint error:', err);
+    const errMsg = err instanceof Error ? err.message : 'Failed to complete action.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
+  }
+}

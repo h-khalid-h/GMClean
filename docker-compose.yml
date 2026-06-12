@@ -1,0 +1,8 @@
+services:
+  gmclean:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET}
+    restart: unless-stopped

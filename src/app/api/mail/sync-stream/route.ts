@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
   const totalLimit = parseInt(url.searchParams.get('totalLimit') || '500', 10) || 500;
   const chunkSize = parseInt(url.searchParams.get('chunkSize') || '100', 10) || 100;
   const folder = url.searchParams.get('folder') || 'INBOX';
+  const sinceUidParam = url.searchParams.get('sinceUid');
+  const sinceUid = sinceUidParam ? parseInt(sinceUidParam, 10) || undefined : undefined;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
             progress,
           };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        }, folder);
+        }, folder, sinceUid);
 
         // Send completion event
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));

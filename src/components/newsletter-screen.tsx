@@ -199,7 +199,10 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
   // ── Single unsubscribe (existing) ──
   const handleUnsubscribe = async (sender: GroupedSender) => {
     if (!sender.unsubscribeLink) return;
-    
+
+    const confirmUnsub = window.confirm(`Unsubscribe from ${sender.senderName}?\n\nThis will send an unsubscribe request to the sender. You may still receive a few emails before it takes effect.`);
+    if (!confirmUnsub) return;
+
     setActionLoadingId(`unsub-${sender.senderEmail}`);
     setAlert(null);
 
@@ -230,7 +233,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
 
       const now = Date.now();
       await Promise.all(
-        sender.uids.map(uid => db.emails.update([userEmail, uid], { unsubscribed: 1, unsubscribedAt: now }))
+        sender.uids.map(uid => db.emails.where({ mailbox: userEmail, uid }).modify({ unsubscribed: 1, unsubscribedAt: now }))
       );
 
       await loadNewsletters();
@@ -268,7 +271,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
       }
 
       await Promise.all(
-        sender.uids.map(uid => db.emails.update([userEmail, uid], { deleted: 1 }))
+        sender.uids.map(uid => db.emails.where({ mailbox: userEmail, uid }).modify({ deleted: 1 }))
       );
 
       setAlert({ type: 'success', message: `Bulk deleted ${sender.count} emails from ${sender.senderName}.` });
@@ -349,7 +352,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
         // Mark in IndexedDB
         const now = Date.now();
         await Promise.all(
-          sender.uids.map(uid => db.emails.update([userEmail, uid], { unsubscribed: 1, unsubscribedAt: now }))
+          sender.uids.map(uid => db.emails.where({ mailbox: userEmail, uid }).modify({ unsubscribed: 1, unsubscribedAt: now }))
         );
 
         results.push({ senderName: sender.senderName, status: 'success' });
@@ -436,7 +439,7 @@ export default function NewsletterScreen({ userEmail, preselectedSenders, onPres
 
         // Mark deleted in IndexedDB
         await Promise.all(
-          batch.map(uid => db.emails.update([userEmail, uid], { deleted: 1 }))
+          batch.map(uid => db.emails.where({ mailbox: userEmail, uid }).modify({ deleted: 1 }))
         );
 
         deletedCount += batch.length;

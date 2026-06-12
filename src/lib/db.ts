@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 
 export interface EmailRecord {
-  id?: number; // Kept for compatibility, but compound key [mailbox, uid] is the primary key
+  id?: number; // Kept for compatibility
   uid: number;
   mailbox: string; // The username/email of the mailbox (to support multiple accounts)
   messageId?: string;
@@ -18,7 +18,7 @@ export interface EmailRecord {
 }
 
 export class GMCleanDatabase extends Dexie {
-  emails!: Table<EmailRecord, [string, number]>; // Primary key is compound type [mailbox, uid]
+  emails!: Table<EmailRecord, [string, string, number]>; // Primary key is [mailbox, folder, uid]
 
   constructor() {
     super('GMCleanDatabase');
@@ -36,6 +36,13 @@ export class GMCleanDatabase extends Dexie {
         if (!email.folder) email.folder = 'INBOX';
         if (email.unsubscribedAt === undefined) email.unsubscribedAt = 0;
       });
+    });
+
+    // v4: change compound key to [mailbox+folder+uid] to fix UID collision across folders.
+    // IMAP UIDs are unique per-folder, not per-mailbox. Without folder in the key,
+    // syncing INBOX and Spam would overwrite records with the same UID.
+    this.version(4).stores({
+      emails: '[mailbox+folder+uid], uid, mailbox, senderEmail, category, date, folder, unsubscribed, unsubscribedAt, deleted'
     });
   }
 }

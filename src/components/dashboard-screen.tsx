@@ -186,7 +186,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
             await Promise.all(classifications.map(async (c) => {
               const validCategories = ['newsletter', 'transaction', 'social', 'personal'];
               if (validCategories.includes(c.category)) {
-                await db.emails.update([userEmail, c.uid], { category: c.category });
+                await db.emails.where({ mailbox: userEmail, uid: c.uid }).modify({ category: c.category });
               }
             }));
             await loadEmails();
@@ -206,7 +206,26 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
     let storedLimit: string | null = null;
     try { storedLimit = localStorage.getItem('gmclean_sync_limit'); } catch { /* */ }
     const MAX = limitOverride ?? (storedLimit === '0' ? 999999 : (storedLimit ? parseInt(storedLimit, 10) || 500 : 500));
-    const res = await fetch(`/api/mail/sync-stream?totalLimit=${MAX}&chunkSize=${CHUNK_SIZE}&folder=${encodeURIComponent(folder)}`, { method: 'POST' });
+
+    // Incremental sync: find the max UID already stored for this folder
+    let sinceUid = 0;
+    try {
+      const existingEmails = await db.emails
+        .where({ mailbox: userEmail, folder })
+        .sortBy('uid');
+      if (existingEmails.length > 0) {
+        sinceUid = existingEmails[existingEmails.length - 1].uid;
+      }
+    } catch { /* first sync, no data yet */ }
+
+    const params = new URLSearchParams({
+      totalLimit: String(MAX),
+      chunkSize: String(CHUNK_SIZE),
+      folder,
+    });
+    if (sinceUid > 0) params.set('sinceUid', String(sinceUid));
+
+    const res = await fetch(`/api/mail/sync-stream?${params.toString()}`, { method: 'POST' });
     if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Streaming sync failed.'); }
     const reader = res.body?.getReader();
     if (!reader) throw new Error('No response stream available.');
@@ -235,7 +254,7 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
           const totalInMailbox = event.progress.total;
           setSyncTotal(Math.min(totalInMailbox, MAX));
           setSyncMessage(`Fetching emails ${cumulativeFetched} to ${cumulativeFetched + fetchedEmails.length}...`);
-          const existingKeys = fetchedEmails.map(e => [userEmail, e.uid] as [string, number]);
+          const existingKeys = fetchedEmails.map(e => [userEmail, folder, e.uid] as [string, string, number]);
           const existingRecords = await db.emails.bulkGet(existingKeys);
           const existingMap = new Map<number, EmailRecord>();
           existingRecords.forEach(r => { if (r) existingMap.set(r.uid, r); });
@@ -375,8 +394,8 @@ export default function DashboardScreen({ userEmail, mailboxHost, onQuickClean }
         throw new Error(data.error || 'Failed to delete email.');
       }
 
-      // Mark as deleted in local database using compound primary key
-      await db.emails.update([userEmail, uid], { deleted: 1 });
+      // Mark as deleted in local database
+      await db.emails.where({ mailbox: userEmail, uid }).modify({ deleted: 1 });
       await loadEmails();
       
       setActionAlert({ type: 'success', message: 'Email deleted successfully from your mailbox.' });

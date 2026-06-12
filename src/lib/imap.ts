@@ -334,7 +334,8 @@ export async function fetchEmailsStreaming(
   totalLimit: number,
   chunkSize: number,
   onChunk: (emails: ParsedEmail[], progress: { fetched: number; total: number }) => void | Promise<void>,
-  folder: string = 'INBOX'
+  folder: string = 'INBOX',
+  sinceUid?: number
 ): Promise<{ total: number; fetched: number }> {
   const client = createImapClient(config);
   await client.connect();
@@ -350,7 +351,84 @@ export async function fetchEmailsStreaming(
       return { total: 0, fetched: 0 };
     }
 
-    // Cap at totalLimit or total available
+    // ── Incremental mode: fetch only UIDs > sinceUid ──
+    if (sinceUid && sinceUid > 0) {
+      const uidRange = `${sinceUid + 1}:*`;
+      const messages = client.fetch(uidRange, {
+        uid: true,
+        envelope: true,
+        headers: ['list-unsubscribe', 'precedence', 'list-id'],
+      });
+
+      let chunkEmails: ParsedEmail[] = [];
+
+      for await (const message of messages) {
+        const envelope = message.envelope;
+        if (!envelope) continue;
+        // Skip the sinceUid itself (IMAP * may include it if it's the max)
+        if (message.uid <= sinceUid) continue;
+
+        const uid = message.uid;
+        const messageId = envelope.messageId || `local-uid-${uid}`;
+        const subject = envelope.subject || '(No Subject)';
+        const fromObj = envelope.from && envelope.from[0];
+        const senderName = fromObj?.name || fromObj?.address?.split('@')[0] || 'Unknown';
+        const senderEmail = fromObj?.address || 'unknown@unknown.com';
+        const date = envelope.date || new Date();
+
+        let hasUnsubscribe = false;
+        let unsubscribeLink = '';
+        const headersMap = new Map<string, string>();
+        if (message.headers) {
+          try {
+            const parsedHeaders = await simpleParser(message.headers);
+            const listUnsub = parsedHeaders.headerLines.find(h => h.key === 'list-unsubscribe');
+            if (listUnsub) {
+              hasUnsubscribe = true;
+              const val = listUnsub.line.slice(listUnsub.line.indexOf(':') + 1).trim();
+              const matches = val.match(/<([^>]+)>/g);
+              if (matches && matches.length > 0) {
+                const urls = matches.map(m => m.slice(1, -1));
+                const httpUrl = urls.find(url => url.startsWith('http'));
+                const mailtoUrl = urls.find(url => url.startsWith('mailto'));
+                unsubscribeLink = httpUrl || mailtoUrl || urls[0];
+              } else {
+                unsubscribeLink = val;
+              }
+            }
+            const prec = parsedHeaders.headerLines.find(h => h.key === 'precedence');
+            if (prec) headersMap.set('precedence', prec.line.slice(prec.line.indexOf(':') + 1).trim().toLowerCase());
+            const listId = parsedHeaders.headerLines.find(h => h.key === 'list-id');
+            if (listId) headersMap.set('list-id', listId.line.slice(listId.line.indexOf(':') + 1).trim().toLowerCase());
+          } catch (e) {
+            console.error(`Failed parsing headers for UID ${uid}:`, e);
+          }
+        }
+
+        chunkEmails.push({
+          uid, messageId, senderName, senderEmail, subject, date,
+          category: classifyEmail(subject, senderEmail, hasUnsubscribe, headersMap),
+          unsubscribeLink: unsubscribeLink || undefined,
+        });
+
+        // Flush chunk
+        if (chunkEmails.length >= chunkSize) {
+          totalFetched += chunkEmails.length;
+          await onChunk(chunkEmails, { fetched: totalFetched, total: totalEmails });
+          chunkEmails = [];
+        }
+      }
+
+      // Flush remainder
+      if (chunkEmails.length > 0) {
+        totalFetched += chunkEmails.length;
+        await onChunk(chunkEmails, { fetched: totalFetched, total: totalEmails });
+      }
+
+      return { total: totalEmails, fetched: totalFetched };
+    }
+
+    // ── Full sync mode (no sinceUid): fetch latest N emails by sequence number ──
     const maxToFetch = Math.min(totalLimit, totalEmails);
     let offset = 0;
 

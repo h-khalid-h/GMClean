@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban } from 'lucide-react';
+import { Mail, Check, Trash2, Link, ExternalLink, RefreshCw, AlertTriangle, ShieldAlert, CheckSquare, Square, X, Ban, Download } from 'lucide-react';
 import { db } from '@/lib/db';
 import styles from '@/app/page.module.css';
 
@@ -424,6 +424,41 @@ export default function NewsletterScreen({ userEmail }: NewsletterScreenProps) {
     cancelRef.current = false;
   };
 
+  // ── Export selected subscriptions ──
+  const handleExportSelected = () => {
+    const selected = getSelectedSenderObjects();
+    if (selected.length === 0) return;
+
+    const escapeCSV = (val: string) => {
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const headers = ['Sender Name', 'Sender Email', 'Email Count', 'Last Received', 'Unsubscribe Link', 'Status', 'Unsubscribed Date'];
+    const rows = selected.map(s => [
+      escapeCSV(s.senderName),
+      escapeCSV(s.senderEmail),
+      s.count.toString(),
+      new Date(s.lastReceived).toISOString().split('T')[0],
+      escapeCSV(s.unsubscribeLink || ''),
+      s.unsubscribed ? 'Unsubscribed' : 'Active',
+      s.unsubscribedAt ? new Date(s.unsubscribedAt).toISOString().split('T')[0] : '',
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gmclean-subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setAlert({ type: 'success', message: `Exported ${selected.length} subscription${selected.length > 1 ? 's' : ''} to CSV.` });
+  };
+
   const cancelBulkOp = () => {
     cancelRef.current = true;
   };
@@ -690,6 +725,13 @@ export default function NewsletterScreen({ userEmail }: NewsletterScreenProps) {
                 <Link size={14} /> Unsubscribe ({unsubscribableCount})
               </button>
             )}
+            <button
+              className={`${styles.btn} ${styles.btnSecondary}`}
+              onClick={handleExportSelected}
+              style={{ width: 'auto', padding: '6px 14px', fontSize: '0.8rem' }}
+            >
+              <Download size={14} /> Export
+            </button>
             <button
               className={`${styles.btn} ${styles.btnDanger}`}
               onClick={handleBulkDelete}

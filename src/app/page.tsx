@@ -152,6 +152,10 @@ export default function Home() {
               <LogOut size={16} />
               <span className={styles.navLabel}>Disconnect</span>
             </button>
+
+            <span className={styles.navLabel} style={{ fontSize: '0.65rem', color: 'var(--muted)', textAlign: 'center', opacity: 0.5, marginTop: '0.25rem' }}>
+              v1.0.0
+            </span>
           </div>
         </aside>
 

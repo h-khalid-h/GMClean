@@ -386,6 +386,11 @@
   margin-bottom: 2rem;
 }
 
+.tableScrollWrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .tableHeader {
   padding: 1.2rem 1.5rem;
   border-bottom: 1px solid var(--border);

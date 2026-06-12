@@ -461,6 +461,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
               onClick={exportCSV}
               style={{ width: 'auto' }}
               title="Export filtered emails to CSV"
+              aria-label="Export emails to CSV"
             >
               <Download size={14} /> Export
             </button>
@@ -479,7 +480,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           <span className={styles.statValue}>{stats.total}</span>
         </div>
         <div 
-          className={`${styles.statCard} ${styles.statNewsletter}`} 
+          className={`${styles.statCard} ${styles.statNewsletter} ${activeFilter === 'newsletter' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('newsletter')}
           style={{ cursor: 'pointer' }}
         >
@@ -487,7 +488,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           <span className={styles.statValue} style={{ color: 'var(--category-newsletter)' }}>{stats.newsletters}</span>
         </div>
         <div 
-          className={`${styles.statCard} ${styles.statTransaction}`} 
+          className={`${styles.statCard} ${styles.statTransaction} ${activeFilter === 'transaction' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('transaction')}
           style={{ cursor: 'pointer' }}
         >
@@ -495,7 +496,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           <span className={styles.statValue} style={{ color: 'var(--category-transaction)' }}>{stats.transactions}</span>
         </div>
         <div 
-          className={`${styles.statCard} ${styles.statSocial}`} 
+          className={`${styles.statCard} ${styles.statSocial} ${activeFilter === 'social' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('social')}
           style={{ cursor: 'pointer' }}
         >
@@ -503,7 +504,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
           <span className={styles.statValue} style={{ color: 'var(--category-social)' }}>{stats.social}</span>
         </div>
         <div 
-          className={`${styles.statCard} ${styles.statPersonal}`} 
+          className={`${styles.statCard} ${styles.statPersonal} ${activeFilter === 'personal' ? styles.statCardActive : ''}`} 
           onClick={() => handleFilterChange('personal')}
           style={{ cursor: 'pointer' }}
         >
@@ -691,6 +692,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
               <p>No email records found. Perform a sync or refine your search.</p>
             </div>
           ) : (
+            <div className={styles.tableScrollWrapper}>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -761,6 +763,7 @@ export default function DashboardScreen({ userEmail, mailboxHost }: DashboardScr
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           {/* Pagination Controls */}
           {filteredEmails.length > ROWS_PER_PAGE && (

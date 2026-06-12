@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { encryptSession, decryptSession } from '@/lib/crypto';
+import { nextAvailableIndex, sessionCookieName, SESSION_COOKIE_OPTIONS } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -95,14 +96,12 @@ export async function GET(request: NextRequest) {
 
     const response = NextResponse.redirect(origin);
     
-    // Set HTTP-only secure cookie for the session
-    response.cookies.set('gmclean_session', encryptedCookie, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 2, // 2 hours (access tokens expire in ~1hr, refresh extends this)
-      path: '/',
-    });
+    // Set HTTP-only secure cookie for the session in the next available slot
+    const idx = nextAvailableIndex(request);
+    if (idx >= 0) {
+      response.cookies.set(sessionCookieName(idx), encryptedCookie, SESSION_COOKIE_OPTIONS);
+      response.cookies.set('gmclean_active', String(idx), { ...SESSION_COOKIE_OPTIONS, httpOnly: false });
+    }
 
     return response;
   } catch (err) {

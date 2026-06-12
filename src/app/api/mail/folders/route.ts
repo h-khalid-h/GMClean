@@ -1,16 +1,10 @@
 import { type NextRequest } from 'next/server';
-import { decryptSession } from '@/lib/crypto';
-import { listFolders, type ImapConfig } from '@/lib/imap';
+import { listFolders } from '@/lib/imap';
+import { getActiveSession } from '@/lib/session';
 
 // GET: List all available IMAP folders
 export async function GET(request: NextRequest) {
-  const sessionCookie = request.cookies.get('gmclean_session');
-  let config: ImapConfig | null = null;
-
-  // Read config from session cookie
-  if (sessionCookie?.value) {
-    config = decryptSession<ImapConfig>(sessionCookie.value);
-  }
+  const config = getActiveSession(request);
 
   if (!config) {
     return new Response(

@@ -1,28 +1,28 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { decryptSession, encryptSession } from '@/lib/crypto';
+import { encryptSession } from '@/lib/crypto';
 import { fetchEmailsChunk, refreshAccessToken, type ImapConfig } from '@/lib/imap';
+import { getActiveSession, getActiveIndex, sessionCookieName, listAccounts, nextAvailableIndex, SESSION_COOKIE_OPTIONS } from '@/lib/session';
 
-// GET: Check active session status
+// GET: Check active session status + list all accounts
 export async function GET(request: NextRequest) {
-  const sessionCookie = request.cookies.get('gmclean_session');
+  const session = getActiveSession(request);
+  const accounts = listAccounts(request);
+  const activeIndex = getActiveIndex(request);
   
-  if (!sessionCookie?.value) {
-    return NextResponse.json({ authenticated: false }, { status: 200 });
-  }
-
-  const session = decryptSession<ImapConfig>(sessionCookie.value);
   if (!session) {
-    return NextResponse.json({ authenticated: false }, { status: 200 });
+    return NextResponse.json({ authenticated: false, accounts, activeIndex }, { status: 200 });
   }
 
   return NextResponse.json({ 
     authenticated: true, 
     user: session.user,
-    host: session.host
+    host: session.host,
+    accounts,
+    activeIndex,
   });
 }
 
-// POST: Sync email chunk
+// POST: Sync email chunk or handle new login
 export async function POST(request: NextRequest) {
   // CSRF protection: verify request origin
   const origin = request.headers.get('origin');
@@ -31,17 +31,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
   }
 
-  const sessionCookie = request.cookies.get('gmclean_session');
-  let config: ImapConfig | null = null;
+  let config: ImapConfig | null = getActiveSession(request);
   let isNewLogin = false;
 
   try {
-    // 1. Try to read from session cookie first
-    if (sessionCookie?.value) {
-      config = decryptSession<ImapConfig>(sessionCookie.value);
-    }
-
-    // 2. If no cookie, check the body (new login)
+    // If no existing session, check the body (new login)
     if (!config) {
       try {
         const body = await request.json();
@@ -65,12 +59,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No connection configuration provided or session expired.' }, { status: 400 });
     }
 
-    // 3. Extract pagination parameters
+    // Extract pagination parameters
     const url = new URL(request.url);
     const limit = parseInt(url.searchParams.get('limit') || '100', 10) || 100;
     const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0;
 
-    // 4. Refresh access token if needed
+    // Refresh access token if needed
     let tokenRefreshed = false;
     if (config.accessToken && config.refreshToken) {
       const oldToken = config.accessToken;
@@ -78,10 +72,10 @@ export async function POST(request: NextRequest) {
       tokenRefreshed = config.accessToken !== oldToken;
     }
 
-    // 5. Fetch the email chunk
+    // Fetch the email chunk
     const result = await fetchEmailsChunk(config, limit, offset);
 
-    // 6. Build response and set cookie if it's a new login or token was refreshed
+    // Build response and set cookie if it's a new login or token was refreshed
     const response = NextResponse.json({
       emails: result.emails,
       total: result.total,
@@ -91,13 +85,12 @@ export async function POST(request: NextRequest) {
 
     if (isNewLogin || tokenRefreshed) {
       const encryptedCookie = encryptSession(config);
-      response.cookies.set('gmclean_session', encryptedCookie, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 2, // 2 hours (access tokens expire in ~1hr, refresh extends this)
-        path: '/',
-      });
+      // For new logins, find the next available slot
+      const idx = isNewLogin ? nextAvailableIndex(request) : getActiveIndex(request);
+      if (idx >= 0) {
+        response.cookies.set(sessionCookieName(idx), encryptedCookie, SESSION_COOKIE_OPTIONS);
+        response.cookies.set('gmclean_active', String(idx), { ...SESSION_COOKIE_OPTIONS, httpOnly: false });
+      }
     }
 
     return response;
@@ -108,9 +101,36 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Clear session (Logout)
-export async function DELETE() {
+// DELETE: Clear session (Logout current account)
+export async function DELETE(request: NextRequest) {
   const response = NextResponse.json({ success: true, message: 'Logged out successfully.' });
+  const idx = getActiveIndex(request);
+  response.cookies.delete(sessionCookieName(idx));
+  // Also clean up legacy cookie
   response.cookies.delete('gmclean_session');
+  // Reset active to 0
+  response.cookies.set('gmclean_active', '0', { ...SESSION_COOKIE_OPTIONS, httpOnly: false });
   return response;
+}
+
+// PATCH: Switch active account
+export async function PATCH(request: NextRequest) {
+  try {
+    const { index } = await request.json();
+    if (typeof index !== 'number' || index < 0 || index > 9) {
+      return NextResponse.json({ error: 'Invalid account index.' }, { status: 400 });
+    }
+
+    const cookieName = sessionCookieName(index);
+    const cookie = request.cookies.get(cookieName)?.value;
+    if (!cookie) {
+      return NextResponse.json({ error: 'No session at that index.' }, { status: 404 });
+    }
+
+    const response = NextResponse.json({ success: true, index });
+    response.cookies.set('gmclean_active', String(index), { ...SESSION_COOKIE_OPTIONS, httpOnly: false });
+    return response;
+  } catch {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
 }

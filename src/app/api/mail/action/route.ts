@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { decryptSession } from '@/lib/crypto';
-import { deleteEmailsByUid, type ImapConfig } from '@/lib/imap';
+import { deleteEmailsByUid } from '@/lib/imap';
+import { getActiveSession } from '@/lib/session';
 import dns from 'dns';
 import { promisify } from 'util';
 
@@ -22,15 +22,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
   }
 
-  const sessionCookie = request.cookies.get('gmclean_session');
-  
-  if (!sessionCookie?.value) {
-    return NextResponse.json({ error: 'Session expired or not authenticated.' }, { status: 401 });
-  }
-
-  const config = decryptSession<ImapConfig>(sessionCookie.value);
+  const config = getActiveSession(request);
   if (!config) {
-    return NextResponse.json({ error: 'Invalid session credentials.' }, { status: 401 });
+    return NextResponse.json({ error: 'Session expired or not authenticated.' }, { status: 401 });
   }
 
   try {

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User } from 'lucide-react';
 import ConnectionScreen from '@/components/connection-screen';
 import DashboardScreen from '@/components/dashboard-screen';
 import NewsletterScreen from '@/components/newsletter-screen';
@@ -17,23 +17,28 @@ export default function Home() {
   const [notification, setNotification] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [preselectedSenders, setPreselectedSenders] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<{ index: number; user: string; host: string }[]>([]);
+  const [addingAccount, setAddingAccount] = useState(false);
 
   // Check if session exists on load
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await fetch('/api/mail/sync');
-        const data = await res.json();
-        if (res.ok && data.authenticated) {
-          setSession({ user: data.user, host: data.host });
-        }
-      } catch (err) {
-        console.error('Failed to restore session:', err);
-      } finally {
-        setSessionChecking(false);
+  const checkSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/mail/sync');
+      const data = await res.json();
+      if (res.ok && data.authenticated) {
+        setSession({ user: data.user, host: data.host });
+      } else {
+        setSession(null);
       }
-    };
+      if (data.accounts) setAccounts(data.accounts);
+    } catch (err) {
+      console.error('Failed to restore session:', err);
+    } finally {
+      setSessionChecking(false);
+    }
+  }, []);
 
+  useEffect(() => {
     checkSession();
     
     // Check for success or error url params (e.g. from OAuth redirects)
@@ -42,11 +47,10 @@ export default function Home() {
       const err = params.get('error');
       if (err) {
         setTimeout(() => setAuthError(err), 0);
-        // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
-  }, []);
+  }, [checkSession]);
 
   const handleConnectSuccess = (data: { user: string; host: string }) => {
     setSession(data);
@@ -55,20 +59,42 @@ export default function Home() {
   };
 
   const handleLogout = async () => {
-    const confirmLogout = window.confirm('Are you sure you want to disconnect? This will clear your credentials and delete all scanned metadata stored locally in this browser.');
+    const confirmLogout = window.confirm('Disconnect this account? Scanned data for this mailbox will be cleared from this browser.');
     if (!confirmLogout) return;
 
     try {
+      // Clear emails for the current user only
+      if (session) {
+        await db.emails.where('mailbox').equals(session.user).delete();
+      }
       await fetch('/api/mail/sync', { method: 'DELETE' });
       
-      // Zero out local IndexedDB to guarantee privacy
-      await db.emails.clear();
-      
-      setSession(null);
+      // Re-check session (may have other accounts)
+      setAddingAccount(false);
+      await checkSession();
       setActiveTab('dashboard');
     } catch (err) {
       console.error('Logout request failed:', err);
     }
+  };
+
+  const handleSwitchAccount = async (index: number) => {
+    try {
+      await fetch('/api/mail/sync', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index }),
+      });
+      await checkSession();
+      setActiveTab('dashboard');
+      setAddingAccount(false);
+    } catch (err) {
+      console.error('Failed to switch account:', err);
+    }
+  };
+
+  const handleAddAccount = () => {
+    setAddingAccount(true);
   };
 
   if (sessionChecking) {
@@ -80,12 +106,29 @@ export default function Home() {
     );
   }
 
-  // RENDER CONNECT PAGE IF UNAUTHENTICATED
-  if (!session) {
+  // RENDER CONNECT PAGE IF UNAUTHENTICATED (or adding account)
+  if (!session || addingAccount) {
     return (
       <main className={styles.container}>
+        {addingAccount && (
+          <button
+            onClick={() => setAddingAccount(false)}
+            style={{
+              position: 'fixed', top: '1rem', left: '1rem', zIndex: 100,
+              background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+              color: 'var(--foreground)', borderRadius: '8px', padding: '8px 16px',
+              cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            ← Back to Dashboard
+          </button>
+        )}
         <ConnectionScreen 
-          onConnectSuccess={handleConnectSuccess} 
+          onConnectSuccess={(data) => {
+            handleConnectSuccess(data);
+            setAddingAccount(false);
+            checkSession();
+          }} 
           onOpenSettings={() => setIsSettingsOpen(true)} 
           initialError={authError || undefined}
         />
@@ -129,10 +172,38 @@ export default function Home() {
           </nav>
 
           <div className={styles.sidebarFooter}>
-            <div className={styles.userBadge}>
-              <span className={styles.userName}>{session.user}</span>
-              <span className={styles.userHost}>{session.host}</span>
-            </div>
+            {/* Account Switcher */}
+            {accounts.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem', width: '100%' }}>
+                {accounts.map(acc => (
+                  <button
+                    key={acc.index}
+                    className={styles.navLink}
+                    onClick={() => handleSwitchAccount(acc.index)}
+                    style={{
+                      padding: '0.4rem 0.6rem', fontSize: '0.75rem', width: '100%',
+                      background: acc.user === session.user ? 'rgba(139,92,246,0.15)' : 'transparent',
+                      borderLeft: acc.user === session.user ? '2px solid var(--primary)' : '2px solid transparent',
+                    }}
+                    title={`${acc.user} (${acc.host})`}
+                  >
+                    <User size={14} />
+                    <span className={styles.navLabel} style={{ fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {acc.user.length > 18 ? acc.user.slice(0, 18) + '…' : acc.user}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  className={styles.navLink}
+                  onClick={handleAddAccount}
+                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', color: 'var(--primary)' }}
+                  title="Connect another mailbox"
+                >
+                  <Plus size={14} />
+                  <span className={styles.navLabel} style={{ fontSize: '0.7rem' }}>Add Account</span>
+                </button>
+              </div>
+            )}
 
             <button
               className={styles.navLink}

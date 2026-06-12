@@ -1,16 +1,10 @@
 import { type NextRequest } from 'next/server';
-import { decryptSession } from '@/lib/crypto';
-import { fetchEmailsStreaming, refreshAccessToken, type ImapConfig } from '@/lib/imap';
+import { fetchEmailsStreaming, refreshAccessToken } from '@/lib/imap';
+import { getActiveSession } from '@/lib/session';
 
 // POST: Stream sync chunks via Server-Sent Events
 export async function POST(request: NextRequest) {
-  const sessionCookie = request.cookies.get('gmclean_session');
-  let config: ImapConfig | null = null;
-
-  // Read config from session cookie
-  if (sessionCookie?.value) {
-    config = decryptSession<ImapConfig>(sessionCookie.value);
-  }
+  const config = getActiveSession(request);
 
   if (!config) {
     return new Response(

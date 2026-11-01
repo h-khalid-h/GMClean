@@ -1,8 +1,26 @@
 # ✉️ GMClean — Privacy-First Google & Microsoft Email Cleaner
 
-**Google, Microsoft Clean — Self-hosted tool that scans your inbox, classifies emails, and lets you mass-unsubscribe, bulk-delete, and export — without ever sharing your data.**
+**This fork adds a dedicated Bulk-delete tab: clean up all scanned emails by sender or domain, and check entire groups for unsubscribe links inside email bodies.**
 
-**v2.0** — Now with Multi-Account support, Inbox Health Score, and Sender Insights.
+Based on [h-khalid-h/GMClean](https://github.com/h-khalid-h/GMClean), the self-hosted email cleaner for Google, Microsoft, and other IMAP mailboxes.
+
+## What's different in this fork?
+
+| Addition | What it does |
+|---|---|
+| **Dedicated Bulk-delete tab** | Includes all scanned email categories, even messages missed by newsletter classification. |
+| **Optional domain grouping** | Switch from **By sender** (the default) to **By domain** to bundle addresses such as `news@hello.courier` and `offers@hello.courier` under `@hello.courier`. Subdomains stay separate. |
+| **Group unsubscribe checks** | **Check unsubscribe** or **Check group unsubscribe** inspects headers and message bodies for actionable unsubscribe links, including localized wording. Domain groups expand to show links per sender. |
+| **Better subscription discovery** | Messages with detected unsubscribe links also appear in **Subscriptions**. Body-check results survive subsequent syncs. |
+| **Folder-aware deletion** | Deletes a sender or domain group's scanned messages in batches, keeping message IDs scoped to their original folders. |
+| **Reliable Trash detection** | Uses the mail server's Trash designation, with fallback support for localized folder names. Safe deletion never silently falls back to permanent deletion. |
+| **Search and filters** | Search names, addresses, and domains; filter groups by whether an unsubscribe link has been found. |
+
+**Scope:** Bulk-delete operates on emails already scanned into the app. Scan the folders you want to include in **Overview** first. In domain mode, **Delete all** applies to every sender in that group. Deletion moves messages to Trash by default; permanent deletion requires enabling it in Settings and confirming the action.
+
+**Privacy:** Regular sync still fetches headers only. Clicking an unsubscribe check explicitly downloads the selected group's messages to your self-hosted server for inspection. Message bodies are not saved in the browser database; detected links and check timestamps are saved. Checking for links does not automatically unsubscribe you.
+
+The upstream features—including multiple accounts, inbox analytics, exports, and optional AI classification—remain available.
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
@@ -19,7 +37,7 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 **GMClean is the zero-knowledge alternative.**
 
 - 🚫 No cloud database — your data never leaves your machine
-- 🚫 No email bodies — only headers are scanned (subject, sender, List-Unsubscribe)
+- 📨 Headers-only regular sync; message bodies are fetched only for explicit unsubscribe checks
 - 🚫 No telemetry — zero tracking, zero analytics, zero data collection
 - ✅ 100% self-hosted — runs entirely on your computer
 - ✅ Open source — audit every line of code yourself
@@ -30,7 +48,7 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 
 | | Feature | Description |
 |---|---|---|
-| 🔒 | **Privacy-First Scanning** | Headers-only analysis — email bodies are never downloaded |
+| 🔒 | **Privacy-First Scanning** | Headers-only regular sync; optional body inspection for unsubscribe checks |
 | 👥 | **Multi-Account** | Connect up to 10 mailboxes (Gmail, Outlook, custom IMAP) simultaneously |
 | 📊 | **Inbox Health Score** | 0-100 hygiene score with 5 weighted factors and actionable recommendations |
 | 📈 | **Sender Insights** | Trend arrows, frequency, and last activity for every top sender |
@@ -40,7 +58,8 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 | ☑️ | **Multi-Select & Bulk Actions** | Select individual senders or Select All with a floating action bar |
 | ✉️ | **One-Click Unsubscribe** | RFC 8058 compliant `List-Unsubscribe-Post` support |
 | 🚫 | **Bulk Unsubscribe** | Unsubscribe from multiple senders at once with progress tracking |
-| 🗑️ | **Bulk Delete** | Mass-delete emails by sender — batched for safety (500/batch) |
+| 🗑️ | **Bulk Delete** | Dedicated tab for all scanned categories, grouped by sender or domain; folder-aware batches of 500 |
+| 🔎 | **Group Unsubscribe Check** | Find links in headers and bodies for an entire sender or domain group |
 | 📤 | **Export Subscriptions** | Export selected senders to CSV with resubscribe links |
 | 📥 | **Full Email Export** | Export all scanned emails to CSV for offline review |
 | 🤖 | **AI Smart Boost** | Optional Gemini-powered classification for edge cases |
@@ -57,7 +76,7 @@ Services like **Unroll.me** and **Clean Email** promise inbox cleanup — but at
 ### Option 1: npm (Development)
 
 ```bash
-git clone https://github.com/h-khalid-h/GMClean.git
+git clone --branch feature/bulk-delete https://github.com/kleingeldbaron/GMClean.git
 cd GMClean
 npm install
 cp .env.example .env.local
@@ -69,16 +88,21 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### Option 2: Docker
 
+Build from this fork's source to include its additions. The upstream prebuilt image does not include these changes.
+
 ```bash
+git clone --branch feature/bulk-delete https://github.com/kleingeldbaron/GMClean.git
+cd GMClean
+docker build -t gmclean-fork .
 docker run -p 3000:3000 \
   -e ENCRYPTION_SECRET=$(openssl rand -base64 32) \
-  ghcr.io/h-khalid-h/gmclean:latest
+  gmclean-fork
 ```
 
 ### Option 3: Docker Compose
 
 ```bash
-git clone https://github.com/h-khalid-h/GMClean.git
+git clone --branch feature/bulk-delete https://github.com/kleingeldbaron/GMClean.git
 cd GMClean
 cp .env.example .env.local
 # Edit .env.local with your ENCRYPTION_SECRET
@@ -118,30 +142,33 @@ flowchart LR
     B -->|Fetch Headers Only| C[📋 Subject / Sender / List-Unsubscribe]
     C -->|Classify| D{Heuristics + AI}
     D -->|Newsletter| E[📊 Dashboard]
-    D -->|Personal| F[Ignored]
+    C --> H[Bulk-delete: all scanned categories]
+    H -->|Explicit unsubscribe check| I[Inspect message bodies for links]
+    H -->|Delete sender or domain group| G
     E -->|User Action| G[✉️ Unsubscribe / 🗑️ Delete]
     G -->|IMAP Commands| A
 ```
 
 1. **Connect** via IMAP using an App Password or OAuth2 (up to 10 accounts)
-2. **Fetch** email headers only — subject, sender, `List-Unsubscribe` (NO body content)
+2. **Sync** email headers — subject, sender, and `List-Unsubscribe`
 3. **Classify** using heuristic rules + optional Gemini AI for ambiguous cases
 4. **Score** your inbox health across 5 hygiene factors (0-100)
 5. **Store** results locally in IndexedDB (your browser, your machine)
-6. **Act** — multi-select senders, bulk-unsubscribe, bulk-delete, or export to CSV
+6. **Act** — manage subscriptions or use **Bulk-delete** to group all scanned emails by sender or domain, check groups for unsubscribe links, and delete them; CSV exports remain available
 7. **Switch** between accounts instantly from the sidebar
 
 ---
 
 ## Privacy
 
-> **Your email content is NEVER downloaded. Period.**
+> **Headers-only by default. Message bodies are downloaded only when you explicitly run an unsubscribe check.**
 
-- 📨 Only email **headers** are fetched — subject line, sender address, and unsubscribe links
+- 📨 Regular sync fetches email **headers** — subject line, sender address, and unsubscribe links
+- 🔎 Explicit unsubscribe checks fetch message bodies for server-side inspection; bodies are not stored in IndexedDB
 - 🔐 Credentials are encrypted with **AES-256-CBC** before storage
 - 💻 Zero cloud dependencies — the entire app runs on **your machine**
 - 🚫 No telemetry, no tracking cookies, no analytics scripts
-- 🗄️ All data lives in your browser's **IndexedDB** — clear it anytime
+- 🗄️ Scanned metadata, detected links, and check timestamps live in your browser's **IndexedDB** — clear them anytime
 - 📖 Fully open source — audit the code yourself
 
 ---

@@ -1,5 +1,6 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { findTrashFolder } from './mail-folders';
 
 export interface ImapConfig {
   host: string;
@@ -116,6 +117,17 @@ export async function listFolders(config: ImapConfig): Promise<string[]> {
     return mailboxes
       .filter(mb => !mb.flags.has('\\Noselect'))
       .map(mb => mb.path);
+  } finally {
+    await client.logout();
+  }
+}
+
+// Preserve SPECIAL-USE metadata when resolving the server's trash folder.
+export async function resolveTrashFolder(config: ImapConfig): Promise<string | undefined> {
+  const client = createImapClient(config);
+  await client.connect();
+  try {
+    return findTrashFolder(await client.list());
   } finally {
     await client.logout();
   }
@@ -326,10 +338,12 @@ export async function deleteEmailsByUid(
   try {
     if (trashFolder && trashFolder !== folder) {
       // Safe delete: move to Trash folder
-      await client.messageMove(uids, trashFolder, { uid: true });
+      const result = await client.messageMove(uids, trashFolder, { uid: true });
+      if (!result) throw new Error('The mail server did not move the messages.');
     } else {
       // Permanent delete: flag + expunge
-      await client.messageDelete(uids, { uid: true });
+      const result = await client.messageDelete(uids, { uid: true });
+      if (!result) throw new Error('The mail server did not delete the messages.');
     }
     return true;
   } finally {
@@ -548,4 +562,31 @@ export async function fetchEmailsStreaming(
   }
 
   return { total: totalEmails, fetched: totalFetched };
+}
+
+// Explicit body check, kept separate from the fast header-only sync.
+export async function checkUnsubscribeLinks(config: ImapConfig, uids: number[], folder: string) {
+  const { findUnsubscribeLink } = await import('./unsubscribe');
+  const client = createImapClient(config);
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock(folder);
+    try {
+      const results: { uid: number; unsubscribeLink?: string }[] = [];
+      for await (const message of client.fetch(uids, { uid: true, source: true }, { uid: true })) {
+        if (!message.source) continue;
+        const parsed = await simpleParser(message.source, { skipHtmlToText: true, skipTextToHtml: true });
+        const header = parsed.headerLines.find(line => line.key === 'list-unsubscribe')?.line;
+        results.push({
+          uid: message.uid,
+          unsubscribeLink: findUnsubscribeLink(header?.slice(header.indexOf(':') + 1), parsed.html || '', parsed.text || ''),
+        });
+      }
+      return results;
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
 }

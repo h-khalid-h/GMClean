@@ -11,6 +11,7 @@ export interface EmailRecord {
   date: Date;
   category: 'newsletter' | 'transaction' | 'social' | 'personal';
   unsubscribeLink?: string;
+  unsubscribeCheckedAt?: number;
   unsubscribed: number; // 0 = false, 1 = true
   unsubscribedAt: number; // timestamp (ms) when unsubscribed, or 0
   folder: string; // IMAP folder the email was fetched from

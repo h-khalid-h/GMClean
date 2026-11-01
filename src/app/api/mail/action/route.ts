@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { deleteEmailsByUid } from '@/lib/imap';
+import { checkUnsubscribeLinks, deleteEmailsByUid, resolveTrashFolder } from '@/lib/imap';
 import { getActiveSession } from '@/lib/session';
 import dns from 'dns';
 import { promisify } from 'util';
@@ -7,7 +7,8 @@ import { promisify } from 'util';
 const dnsLookup = promisify(dns.lookup);
 
 interface ActionPayload {
-  action: 'delete' | 'unsubscribe';
+  action: 'delete' | 'unsubscribe' | 'check-unsubscribe';
+  mailbox?: string;
   uids?: number[];
   folder?: string;
   permanent?: boolean; // If true, permanently expunge. If false/omitted, move to Trash.
@@ -37,6 +38,24 @@ export async function POST(request: NextRequest) {
     }
     
     const { action } = body;
+    if (body.mailbox && body.mailbox !== config.user) {
+      return NextResponse.json({ error: 'Active account changed. Reload before continuing.' }, { status: 409 });
+    }
+    if (action === 'delete' || action === 'check-unsubscribe') {
+      if (!Array.isArray(body.uids) || !body.uids.length || body.uids.some(uid => !Number.isSafeInteger(uid) || uid <= 0)) {
+        return NextResponse.json({ error: 'Valid positive message UIDs are required.' }, { status: 400 });
+      }
+      if (body.folder !== undefined && (typeof body.folder !== 'string' || !body.folder.trim())) {
+        return NextResponse.json({ error: 'Invalid folder.' }, { status: 400 });
+      }
+    }
+    if (action === 'check-unsubscribe') {
+      if (body.uids!.length > 25) {
+        return NextResponse.json({ error: 'Check at most 25 messages per batch.' }, { status: 400 });
+      }
+      const results = await checkUnsubscribeLinks(config, body.uids!, body.folder || 'INBOX');
+      return NextResponse.json({ success: true, results });
+    }
 
     // 1. ACTION: BULK DELETE
     if (action === 'delete') {
@@ -57,14 +76,13 @@ export async function POST(request: NextRequest) {
       // Safe delete: resolve trash folder unless permanent is requested
       let trashFolder: string | undefined;
       if (!body.permanent) {
-        try {
-          const { listFolders } = await import('@/lib/imap');
-          const folders = await listFolders(config);
-          // Common trash folder names across providers
-          const trashNames = ['[Gmail]/Trash', '[Gmail]/Bin', 'Trash', 'Deleted Items', 'Deleted Messages', 'Deleted'];
-          trashFolder = folders.find(f => trashNames.some(t => f.toLowerCase() === t.toLowerCase()));
-        } catch {
-          // Can't resolve trash — fall back to permanent delete
+        // Let connection/list errors surface instead of misreporting a missing Trash folder.
+        trashFolder = await resolveTrashFolder(config);
+        if (!trashFolder) {
+          return NextResponse.json({ error: 'The mail server did not identify a Trash folder. No messages were deleted. Check your mailbox folder configuration.' }, { status: 409 });
+        }
+        if (trashFolder === sourceFolder) {
+          return NextResponse.json({ error: 'These messages are already in Trash. Permanent deletion must be enabled in Settings to remove them.' }, { status: 409 });
         }
       }
 

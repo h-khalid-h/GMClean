@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
   let isNewLogin = false;
 
   try {
-    // If no existing session, check the body (new login)
-    if (!config) {
+    // Accept new account credentials even when another account is active
+    if (request.headers.get('content-type')?.includes('application/json')) {
       try {
         const body = await request.json();
         if (body && body.host && body.port && body.user && (body.pass || body.accessToken)) {

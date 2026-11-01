@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User, Sun, Moon, Shield } from 'lucide-react';
+import { Mail, LayoutDashboard, Settings, LogOut, CheckCircle, Plus, User, Sun, Moon, Shield, Trash2 } from 'lucide-react';
 import ConnectionScreen from '@/components/connection-screen';
 import DashboardScreen from '@/components/dashboard-screen';
+import BulkDeleteScreen from '@/components/bulk-delete-screen';
 import NewsletterScreen from '@/components/newsletter-screen';
 import SettingsDrawer from '@/components/settings-drawer';
 import { db } from '@/lib/db';
@@ -12,7 +13,7 @@ import styles from '@/app/page.module.css';
 export default function Home() {
   const [session, setSession] = useState<{ user: string; host: string } | null>(null);
   const [sessionChecking, setSessionChecking] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'newsletters'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'newsletters' | 'bulk-delete'>('dashboard');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -207,6 +208,14 @@ export default function Home() {
               <Mail size={18} />
               <span className={styles.navLabel}>Subscriptions</span>
             </button>
+            <button
+              className={`${styles.navLink} ${activeTab === 'bulk-delete' ? styles.navLinkActive : ''}`}
+              onClick={() => setActiveTab('bulk-delete')}
+              aria-label="Bulk-delete by sender"
+            >
+              <Trash2 size={18} />
+              <span className={styles.navLabel}>Bulk-delete</span>
+            </button>
           </nav>
 
           <div className={styles.sidebarFooter}>
@@ -318,6 +327,8 @@ export default function Home() {
                 setActiveTab('newsletters');
               }}
             />
+          ) : activeTab === 'bulk-delete' ? (
+            <BulkDeleteScreen key={session.user} userEmail={session.user} />
           ) : (
             <NewsletterScreen 
               key={session.user}
